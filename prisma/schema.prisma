@@ -1,0 +1,246 @@
+// Asset Management System - Prisma Schema
+// Next.js 15+ with App Router
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  agency_admin
+  asset_manager
+  staff
+  viewer
+}
+
+enum AssetStatus {
+  active
+  inactive
+  maintenance
+  disposed
+}
+
+enum DepreciationMethod {
+  straight_line
+  declining_balance
+}
+
+enum MaintenanceType {
+  preventive
+  corrective
+  emergency
+}
+
+enum MaintenanceStatus {
+  pending
+  in_progress
+  completed
+  cancelled
+}
+
+enum MaintenancePriority {
+  low
+  medium
+  high
+  critical
+}
+
+enum TransactionType {
+  acquire
+  transfer
+  dispose
+  adjust
+}
+
+// ==================== AUTH & RBAC ====================
+
+model User {
+  id             Int      @id @default(autoincrement())
+  username       String   @unique
+  email          String   @unique
+  hashedPassword String   @map("hashed_password")
+  fullName       String?  @map("full_name")
+  departmentId   Int?     @map("department_id")
+  department     Department? @relation(fields: [departmentId], references: [id])
+  position       String?
+  phone          String?
+  role           UserRole @default(staff)
+  isActive       Boolean  @default(true) @map("is_active")
+  permissions    String?
+  lastLogin      DateTime? @map("last_login")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+// ==================== DEPARTMENT ====================
+
+model Department {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users       User[]
+  assets      Asset[]
+
+  @@map("departments")
+}
+
+// ==================== ASSET MANAGEMENT ====================
+
+model Asset {
+  id                 Int      @id @default(autoincrement())
+  assetCode          String   @unique @map("asset_code")
+  name               String
+  description        String?
+  categoryId         Int?     @map("category_id")
+  serialNumber       String?  @map("serial_number")
+  
+  purchasePrice      Float?    @default(0.0) @map("purchase_price")
+  purchaseDate       DateTime? @map("purchase_date")
+  usefulLifeYears    Int?      @default(5) @map("useful_life_years")
+  salvageValue       Float     @default(0.0) @map("salvage_value")
+  depreciationMethod DepreciationMethod @default(straight_line) @map("depreciation_method")
+  
+  location           String?
+  departmentId       Int?     @map("department_id")
+  department         Department? @relation(fields: [departmentId], references: [id])
+  status             AssetStatus @default(active)
+  condition          String   @default("good")
+  
+  imageData          String?  @db.LongText @map("image_data")
+  qrCodePath         String?  @map("qr_code_path")
+  qrCode             QRCode?
+  
+  category           Category? @relation(fields: [categoryId], references: [id])
+  depreciationRecords DepreciationRecord[]
+  maintenanceRecords MaintenanceRecord[]
+  transactions       AssetTransaction[]
+  
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("assets")
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  code        String   @unique
+  description String?
+  assets      Asset[]
+  
+  createdAt   DateTime? @map("created_at")
+  updatedAt   DateTime? @map("updated_at")
+
+  @@map("categories")
+}
+
+// ==================== DEPRECIATION ====================
+
+model DepreciationRecord {
+  id                  Int      @id @default(autoincrement())
+  assetId             Int      @map("asset_id")
+  fiscalYear          Int      @map("fiscal_year")
+  
+  beginningBookValue  Float    @map("beginning_book_value")
+  depreciationExpense Float    @map("depreciation_expense")
+  accumulatedDepreciation Float @map("accumulated_depreciation")
+  endingBookValue     Float    @map("ending_book_value")
+  
+  notes               String?
+  
+  asset               Asset    @relation(fields: [assetId], references: [id])
+  
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@map("depreciation_records")
+}
+
+// ==================== MAINTENANCE ====================
+
+model MaintenanceRecord {
+  id                   Int      @id @default(autoincrement())
+  assetId              Int      @map("asset_id")
+  maintenanceType      MaintenanceType @map("maintenance_type")
+  title                String
+  description          String?
+  priority             MaintenancePriority @default(medium)
+  
+  scheduledDate        DateTime? @map("scheduled_date")
+  completedDate        DateTime? @map("completed_date")
+  
+  status               MaintenanceStatus @default(pending)
+  
+  laborCost            Float?   @map("cost")
+  totalCost            Float    @default(0.0) @map("total_cost")
+  
+  technicianName       String?  @map("technician")
+  
+  asset                Asset    @relation(fields: [assetId], references: [id])
+  
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("maintenance_records")
+}
+
+// ==================== TRANSACTIONS ====================
+
+model AssetTransaction {
+  id              Int      @id @default(autoincrement())
+  assetId         Int      @map("asset_id")
+  transactionType TransactionType @map("transaction_type")
+  transactionDate DateTime @map("transaction_date")
+  referenceNumber String?  @map("reference_number")
+  notes           String?
+  
+  asset           Asset    @relation(fields: [assetId], references: [id])
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("asset_transactions")
+}
+
+// ==================== AUDIT LOGGING ====================
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  action     String
+  entityType String
+  entityId   Int?
+  oldValues  String?
+  newValues  String?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+  
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// ==================== QR CODES ====================
+
+model QRCode {
+  id        Int      @id @default(autoincrement())
+  assetId   Int      @unique
+  asset     Asset    @relation(fields: [assetId], references: [id])
+  qrData    String
+  filePath  String
+  createdAt DateTime @default(now())
+
+  @@map("qr_codes")
+}

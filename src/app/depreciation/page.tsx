@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -20,7 +20,19 @@ interface Depreciation {
   asset?: {
     assetCode: string;
     name: string;
+    department?: string | null;
+    category?: string | null;
   };
+}
+
+interface Category {
+  id: number;
+  name: string;
+}
+
+interface Department {
+  id: number;
+  name: string;
 }
 
 interface ScheduleRow {
@@ -46,8 +58,12 @@ export default function DepreciationPage() {
   const { language } = useAppLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [depreciations, setDepreciations] = useState<Depreciation[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [methodFilter, setMethodFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [schedule, setSchedule] = useState<ScheduleRow[]>([]);
   const [selectedAssetInfo, setSelectedAssetInfo] = useState<ScheduleAssetInfo | null>(null);
@@ -73,6 +89,27 @@ export default function DepreciationPage() {
     }
   }, []);
 
+  const fetchFilterOptions = useCallback(async () => {
+    try {
+      const [categoriesRes, departmentsRes] = await Promise.all([
+        fetch('/api/categories'),
+        fetch('/api/departments'),
+      ]);
+
+      if (categoriesRes.ok) {
+        const categoriesData: Category[] = await categoriesRes.json();
+        setCategories(categoriesData);
+      }
+
+      if (departmentsRes.ok) {
+        const departmentsData: Department[] = await departmentsRes.json();
+        setDepartments(departmentsData);
+      }
+    } catch {
+      console.error('Failed to fetch depreciation filters');
+    }
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -80,8 +117,8 @@ export default function DepreciationPage() {
       return;
     }
 
-    void fetchDepreciations();
-  }, [fetchDepreciations, router]);
+    void Promise.all([fetchDepreciations(), fetchFilterOptions()]);
+  }, [fetchDepreciations, fetchFilterOptions, router]);
 
   const fetchSchedule = async (assetId: number) => {
     try {
@@ -98,9 +135,22 @@ export default function DepreciationPage() {
   };
 
   const filteredDepreciations = useMemo(() => {
-    if (!methodFilter) return depreciations;
-    return depreciations.filter((dep) => dep.depreciationMethod === methodFilter);
-  }, [depreciations, methodFilter]);
+    return depreciations.filter((dep) => {
+      if (methodFilter && dep.depreciationMethod !== methodFilter) {
+        return false;
+      }
+
+      if (departmentFilter && dep.asset?.department !== departmentFilter) {
+        return false;
+      }
+
+      if (categoryFilter && dep.asset?.category !== categoryFilter) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [categoryFilter, departmentFilter, depreciations, methodFilter]);
 
   const summary = useMemo(() => {
     return filteredDepreciations.reduce(
@@ -127,6 +177,8 @@ export default function DepreciationPage() {
     }),
     [language]
   );
+
+  const currencyUnit = language === 'th' ? 'บาท' : 'THB';
 
   const scheduleChart = useMemo(() => {
     if (schedule.length === 0) return null;
@@ -181,22 +233,30 @@ export default function DepreciationPage() {
 
         <main className="px-6 pb-8 pt-4 lg:px-8">
           <div className="mb-8 flex items-center gap-5">
-            <div className="text-6xl">📈</div>
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1d1d1d] text-indigo-400">
+              <svg className="h-9 w-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 19h16M6 17l4-5 3 3 5-7" />
+                <circle cx="6" cy="17" r="1.2" fill="currentColor" stroke="none" />
+                <circle cx="10" cy="12" r="1.2" fill="currentColor" stroke="none" />
+                <circle cx="13" cy="15" r="1.2" fill="currentColor" stroke="none" />
+                <circle cx="18" cy="8" r="1.2" fill="currentColor" stroke="none" />
+              </svg>
+            </div>
             <h1 className="text-5xl font-black tracking-tight text-white">Depreciation Management</h1>
           </div>
 
           <section className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
               <p className="text-lg text-zinc-400">Total Original Value</p>
-              <p className="mt-4 text-4xl font-black text-indigo-400">{currencyFormatter.format(summary.totalOriginalValue)} ฿</p>
+              <p className="mt-4 text-4xl font-black text-indigo-400">{currencyFormatter.format(summary.totalOriginalValue)} {currencyUnit}</p>
             </div>
             <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
               <p className="text-lg text-zinc-400">Accumulated Depreciation</p>
-              <p className="mt-4 text-4xl font-black text-amber-400">{currencyFormatter.format(summary.accumulatedDepreciation)} ฿</p>
+              <p className="mt-4 text-4xl font-black text-amber-400">{currencyFormatter.format(summary.accumulatedDepreciation)} {currencyUnit}</p>
             </div>
             <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
               <p className="text-lg text-zinc-400">Net Book Value</p>
-              <p className="mt-4 text-4xl font-black text-emerald-400">{currencyFormatter.format(summary.netBookValue)} ฿</p>
+              <p className="mt-4 text-4xl font-black text-emerald-400">{currencyFormatter.format(summary.netBookValue)} {currencyUnit}</p>
             </div>
             <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
               <p className="text-lg text-zinc-400">Total Assets</p>
@@ -205,17 +265,57 @@ export default function DepreciationPage() {
           </section>
 
           <section className="mb-6 rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <label className="text-2xl text-zinc-400">{language === 'th' ? 'กรองตามวิธีคิดค่าเสื่อม:' : 'Filter by Method:'}</label>
-              <select
-                value={methodFilter}
-                onChange={(e) => setMethodFilter(e.target.value)}
-                className="w-full max-w-xs rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
-              >
-                <option value="">{language === 'th' ? 'ทุกวิธี' : 'All Methods'}</option>
-                <option value="straight_line">{methodLabels.straight_line}</option>
-                <option value="declining_balance">{methodLabels.declining_balance}</option>
-              </select>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <div className="space-y-3">
+                <label className="block text-xl text-zinc-400">
+                  {language === 'th' ? 'กรองตามวิธีคิดค่าเสื่อม' : 'Filter by Method'}
+                </label>
+                <select
+                  value={methodFilter}
+                  onChange={(e) => setMethodFilter(e.target.value)}
+                  className="w-full rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
+                >
+                  <option value="">{language === 'th' ? 'ทุกวิธี' : 'All Methods'}</option>
+                  <option value="straight_line">{methodLabels.straight_line}</option>
+                  <option value="declining_balance">{methodLabels.declining_balance}</option>
+                </select>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-xl text-zinc-400">
+                  {language === 'th' ? 'หน่วยงาน' : 'Department'}
+                </label>
+                <select
+                  value={departmentFilter}
+                  onChange={(e) => setDepartmentFilter(e.target.value)}
+                  className="w-full rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
+                >
+                  <option value="">{language === 'th' ? 'ทุกหน่วยงาน' : 'All Departments'}</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.name}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-xl text-zinc-400">
+                  {language === 'th' ? 'หมวดหมู่' : 'Category'}
+                </label>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="w-full rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
+                >
+                  <option value="">{language === 'th' ? 'ทุกหมวดหมู่' : 'All Categories'}</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.name}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </section>
 
@@ -244,7 +344,7 @@ export default function DepreciationPage() {
                   ) : filteredDepreciations.length === 0 ? (
                     <tr className="border-t border-white/5">
                       <td colSpan={6} className="px-4 py-14 text-center text-lg text-zinc-500">
-                        ไม่พบข้อมูลค่าเสื่อมราคา
+                        {language === 'th' ? 'ไม่พบข้อมูลค่าเสื่อมราคา' : 'No depreciation data found'}
                       </td>
                     </tr>
                   ) : (
@@ -263,12 +363,12 @@ export default function DepreciationPage() {
                           <td className="px-4 py-6 align-middle">
                             <span className={`inline-flex rounded-md px-4 py-1 text-sm font-bold ${methodClass}`}>{methodLabel}</span>
                           </td>
-                          <td className="px-4 py-6 text-right align-middle">{currencyFormatter.format(dep.beginningBookValue)} ฿</td>
+                          <td className="px-4 py-6 text-right align-middle">{currencyFormatter.format(dep.beginningBookValue)} {currencyUnit}</td>
                           <td className="px-4 py-6 text-right align-middle font-bold text-amber-400">
-                            {currencyFormatter.format(dep.accumulatedDepreciation)} ฿
+                            {currencyFormatter.format(dep.accumulatedDepreciation)} {currencyUnit}
                           </td>
                           <td className="px-4 py-6 text-right align-middle font-bold text-emerald-400">
-                            {currencyFormatter.format(dep.endingBookValue)} ฿
+                            {currencyFormatter.format(dep.endingBookValue)} {currencyUnit}
                           </td>
                         </tr>
                       );
@@ -281,7 +381,7 @@ export default function DepreciationPage() {
 
           <section className="mt-8 rounded-2xl border-l-4 border-indigo-500 bg-[#1d1d1d] px-8 py-7 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
             <div className="flex items-start gap-3">
-              <span className="mt-1 text-xl text-amber-300">💡</span>
+              <span className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-400/15 text-amber-300">i</span>
               <div>
                 <h2 className="text-2xl font-bold text-white">Depreciation Methods</h2>
                 <p className="mt-3 text-lg text-zinc-400">
@@ -382,9 +482,9 @@ export default function DepreciationPage() {
               {schedule.map((row, index) => (
                 <tr key={index} className="hover:bg-gray-700">
                   <td className="px-4 py-2 text-white">{row.year}</td>
-                  <td className="px-4 py-2 text-right text-white">{currencyFormatter.format(row.depreciationExpense)} ฿</td>
-                  <td className="px-4 py-2 text-right text-white">{currencyFormatter.format(row.accumulatedDepreciation)} ฿</td>
-                  <td className="px-4 py-2 text-right text-white">{currencyFormatter.format(row.endingBookValue)} ฿</td>
+                  <td className="px-4 py-2 text-right text-white">{currencyFormatter.format(row.depreciationExpense)} {currencyUnit}</td>
+                  <td className="px-4 py-2 text-right text-white">{currencyFormatter.format(row.accumulatedDepreciation)} {currencyUnit}</td>
+                  <td className="px-4 py-2 text-right text-white">{currencyFormatter.format(row.endingBookValue)} {currencyUnit}</td>
                 </tr>
               ))}
             </tbody>
@@ -394,3 +494,4 @@ export default function DepreciationPage() {
     </div>
   );
 }
+

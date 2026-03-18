@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -8,12 +8,14 @@ import Header from '../../components/Header';
 import Toast from '../../components/Toast';
 import { defaultBranding, getBrandingSnapshot, parseBranding, saveBranding } from '@/lib/branding';
 import { AppLanguage, useAppLanguage } from '@/lib/language';
+import { getPublicQrBaseUrlSnapshot, parsePublicQrBaseUrl, savePublicQrBaseUrl } from '@/lib/public-qr-base-url';
 
 export default function SettingsPage() {
   const { language, setLanguage, t } = useAppLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [brandTitle, setBrandTitle] = useState(() => parseBranding(getBrandingSnapshot()).title);
   const [brandSubtitle, setBrandSubtitle] = useState(() => parseBranding(getBrandingSnapshot()).subtitle);
+  const [publicQrBaseUrl, setPublicQrBaseUrl] = useState(() => parsePublicQrBaseUrl(getPublicQrBaseUrlSnapshot()));
   const [selectedLanguage, setSelectedLanguage] = useState<AppLanguage>(language);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const router = useRouter();
@@ -30,31 +32,31 @@ export default function SettingsPage() {
       id: 'departments',
       title: t('settingsDepartments'),
       description: t('settingsDepartmentsDesc'),
-      icon: '🏢',
+      icon: '๐ข',
       href: '/settings/departments',
     },
     {
       id: 'categories',
       title: t('settingsCategories'),
       description: t('settingsCategoriesDesc'),
-      icon: '📦',
+      icon: '๐“ฆ',
       href: '/settings/categories',
     },
     {
       id: 'users',
       title: t('settingsUsers'),
       description: t('settingsUsersDesc'),
-      icon: '👤',
+      icon: '๐‘ค',
       href: '/settings/users',
     },
     {
       id: 'import-csv',
-      title: language === 'th' ? 'นำเข้า CSV' : 'Import CSV',
+      title: language === 'th' ? 'เธเธณเน€เธเนเธฒ CSV' : 'Import CSV',
       description:
         language === 'th'
-          ? 'อัปโหลดไฟล์ GLPI CSV เพื่อนำเข้าครุภัณฑ์เข้าสู่ระบบ'
+          ? 'เธญเธฑเธเนเธซเธฅเธ”เนเธเธฅเน GLPI CSV เน€เธเธทเนเธญเธเธณเน€เธเนเธฒเธเธฃเธธเธ เธฑเธ“เธ‘เนเน€เธเนเธฒเธชเธนเนเธฃเธฐเธเธ'
           : 'Upload a GLPI CSV file to import assets into the system',
-      icon: '📥',
+      icon: '๐“ฅ',
       href: '/settings/import-csv',
     },
   ];
@@ -74,7 +76,25 @@ export default function SettingsPage() {
 
   const handleLanguageSave = () => {
     setLanguage(selectedLanguage);
-    setToast({ message: selectedLanguage === 'th' ? 'บันทึกภาษาเรียบร้อยแล้ว' : 'Language saved successfully', type: 'success' });
+    setToast({ message: selectedLanguage === 'th' ? 'เธเธฑเธเธ—เธถเธเธ เธฒเธฉเธฒเน€เธฃเธตเธขเธเธฃเนเธญเธขเนเธฅเนเธง' : 'Language saved successfully', type: 'success' });
+  };
+  const handlePublicQrBaseUrlSave = () => {
+    const normalized = parsePublicQrBaseUrl(publicQrBaseUrl);
+
+    if (publicQrBaseUrl.trim() && !normalized) {
+      setToast({
+        message: language === 'th' ? 'กรุณากรอก Public QR Base URL ให้ถูกต้อง' : 'Please enter a valid Public QR Base URL',
+        type: 'error',
+      });
+      return;
+    }
+
+    savePublicQrBaseUrl(publicQrBaseUrl);
+    setPublicQrBaseUrl(normalized);
+    setToast({
+      message: language === 'th' ? 'บันทึก Public QR Base URL เรียบร้อยแล้ว' : 'Public QR Base URL saved successfully',
+      type: 'success',
+    });
   };
 
   return (
@@ -157,6 +177,37 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          <div className="mb-8 rounded-lg bg-gray-800 p-6 shadow-lg">
+            <h2 className="mb-4 text-xl font-bold text-white">Public QR Base URL</h2>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-300">
+                  {language === 'th' ? 'URL กลางสำหรับ QR ใน production' : 'Stable production URL for QR codes'}
+                </label>
+                <input
+                  type="url"
+                  value={publicQrBaseUrl}
+                  onChange={(e) => setPublicQrBaseUrl(e.target.value)}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:border-indigo-500 focus:outline-none"
+                  placeholder="https://asset.company.com"
+                />
+                <p className="mt-2 text-sm text-gray-400">
+                  {language === 'th'
+                    ? 'ตั้งค่า domain กลางที่ใช้สร้าง OPEN_URL ใน QR เพื่อลดการพิมพ์ใหม่เมื่อย้ายเครื่องหรือเปลี่ยน deploy URL'
+                    : 'Set a stable domain for OPEN_URL in QR payloads so you do not need to reprint when deployment URLs change.'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handlePublicQrBaseUrlSave}
+                className="rounded-lg bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-500"
+              >
+                {language === 'th' ? 'บันทึก URL' : 'Save URL'}
+              </button>
+            </div>
+          </div>
+
           <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
             {menuItems.map((item) => (
               <Link
@@ -202,3 +253,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+

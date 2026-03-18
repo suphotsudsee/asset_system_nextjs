@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Sidebar from '../../../components/Sidebar';
 import Header from '../../../components/Header';
 import Toast from '../../../components/Toast';
+import { usePublicQrBaseUrl } from '@/lib/public-qr-base-url';
 
 interface AssetCategory {
   id: number;
@@ -93,6 +94,7 @@ export default function AssetDetailPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const publicQrBaseUrl = usePublicQrBaseUrl();
 
   const fetchAsset = useCallback(async () => {
     try {
@@ -163,7 +165,7 @@ export default function AssetDetailPage() {
   }
 
   const imageUrl = getAssetImage(asset);
-  const qrImageUrl = `/api/qr/${asset.id}/image?rev=offline-v2`;
+  const qrImageUrl = `/api/qr/${asset.id}/image?rev=offline-v2${publicQrBaseUrl ? `&baseUrl=${encodeURIComponent(publicQrBaseUrl)}` : ''}`;
   const qrDownloadUrl = `/api/qr/${asset.id}/download`;
   const maintenanceCount = asset.maintenanceRecords?.length ?? 0;
 

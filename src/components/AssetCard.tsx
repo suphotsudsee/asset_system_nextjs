@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePublicQrBaseUrl } from '@/lib/public-qr-base-url';
 
 interface Asset {
   id: number;
@@ -23,7 +24,8 @@ interface AssetCardProps {
 
 export default function AssetCard({ asset }: AssetCardProps) {
   const assetImage = asset.image ?? asset.imageData ?? null;
-  const qrImageUrl = `/api/qr/${asset.id}/image?rev=offline-v2`;
+  const publicQrBaseUrl = usePublicQrBaseUrl();
+  const qrImageUrl = `/api/qr/${asset.id}/image?rev=offline-v2${publicQrBaseUrl ? `&baseUrl=${encodeURIComponent(publicQrBaseUrl)}` : ''}`;
 
   const statusColors: Record<string, string> = {
     active: 'bg-green-500',

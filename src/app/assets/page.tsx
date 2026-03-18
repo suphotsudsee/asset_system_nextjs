@@ -8,6 +8,7 @@ import Header from '../../components/Header';
 import Modal from '../../components/Modal';
 import Toast from '../../components/Toast';
 import { useAppLanguage } from '@/lib/language';
+import { usePublicQrBaseUrl } from '@/lib/public-qr-base-url';
 
 interface Category {
   id: number;
@@ -51,6 +52,7 @@ interface AssetsResponse {
 export default function AssetsPage() {
   const { language, locale, t } = useAppLanguage();
   const qrRevision = 'offline-v2';
+  const publicQrBaseUrl = usePublicQrBaseUrl();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -212,7 +214,7 @@ export default function AssetsPage() {
       return;
     }
 
-    const qrImageUrl = `${window.location.origin}/api/qr/${asset.id}/image?rev=${qrRevision}`;
+    const qrImageUrl = `${window.location.origin}/api/qr/${asset.id}/image?rev=${qrRevision}${publicQrBaseUrl ? `&baseUrl=${encodeURIComponent(publicQrBaseUrl)}` : ''}`;
     const escapedName = asset.name.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     const escapedCode = asset.assetCode.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
@@ -271,7 +273,7 @@ export default function AssetsPage() {
           .map((asset) => {
             const escapedName = asset.name.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
             const escapedCode = asset.assetCode.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-            const qrImageUrl = `${window.location.origin}/api/qr/${asset.id}/image?rev=${qrRevision}`;
+            const qrImageUrl = `${window.location.origin}/api/qr/${asset.id}/image?rev=${qrRevision}${publicQrBaseUrl ? `&baseUrl=${encodeURIComponent(publicQrBaseUrl)}` : ''}`;
 
             return `
               <div class="label">

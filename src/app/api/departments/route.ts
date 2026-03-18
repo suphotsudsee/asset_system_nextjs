@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getRequestIp } from '@/lib/request-ip';
 import { getSessionFromCookie, verifyJWT } from '@/lib/auth';
 
 // GET /api/departments - List all departments
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
         entityType: 'Department',
         entityId: department.id,
         newValues: JSON.stringify({ name, code, description }),
-        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        ipAddress: getRequestIp(request),
         userAgent: request.headers.get('user-agent') || undefined,
       },
     });
@@ -97,3 +98,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

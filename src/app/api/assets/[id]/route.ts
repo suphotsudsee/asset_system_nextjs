@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getRequestIp } from '@/lib/request-ip';
 import { getSessionFromCookie, verifyJWT } from '@/lib/auth';
 
 function getImageData(body: Record<string, unknown>): string | null | undefined {
@@ -156,7 +157,7 @@ export async function PUT(
           departmentId: data.departmentId ?? asset.departmentId,
           status: data.status ?? asset.status,
         }),
-        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        ipAddress: getRequestIp(request),
         userAgent: request.headers.get('user-agent') || undefined,
       },
     });
@@ -213,7 +214,7 @@ export async function DELETE(
           departmentId: asset.departmentId,
           status: asset.status,
         }),
-        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        ipAddress: getRequestIp(request),
         userAgent: request.headers.get('user-agent') || undefined,
       },
     });
@@ -245,3 +246,4 @@ export async function DELETE(
     );
   }
 }
+

@@ -13,6 +13,7 @@ interface User {
   email: string;
   fullName?: string | null;
   role: string;
+  departmentId?: number | null;
   department?: string | null;
   position?: string | null;
   isActive: boolean;
@@ -92,9 +93,8 @@ export default function UsersPage() {
         password: '',
         fullName: user.fullName || '',
         role: user.role,
-        department: user.department || '',
+        departmentId: user.departmentId ?? departments[0]?.id ?? 1,
         position: user.position || '',
-        agencyId: 1,
         isActive: user.isActive,
       });
     } else {
@@ -105,9 +105,8 @@ export default function UsersPage() {
         password: '',
         fullName: '',
         role: 'staff',
-        department: '',
+        departmentId: departments[0]?.id ?? 1,
         position: '',
-        agencyId: 1,
         isActive: true,
       });
     }

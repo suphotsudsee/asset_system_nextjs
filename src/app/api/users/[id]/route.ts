@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getRequestIp } from '@/lib/request-ip';
 import { getSessionFromCookie, verifyJWT, hashPassword } from '@/lib/auth';
 
 // GET /api/users/[id] - Get single user
@@ -44,6 +45,7 @@ export async function GET(
       email: user.email,
       fullName: user.fullName,
       role: user.role,
+      departmentId: user.departmentId,
       department: user.department?.name,
       position: user.position,
       isActive: user.isActive,
@@ -134,7 +136,7 @@ export async function PUT(
           departmentId: data.departmentId ?? user.departmentId,
           isActive: data.isActive ?? user.isActive,
         }),
-        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        ipAddress: getRequestIp(request),
         userAgent: request.headers.get('user-agent') || undefined,
       },
     });
@@ -145,6 +147,7 @@ export async function PUT(
       email: updated.email,
       fullName: updated.fullName,
       role: updated.role,
+      departmentId: updated.departmentId,
       department: updated.department?.name,
       position: updated.position,
       isActive: updated.isActive,
@@ -209,7 +212,7 @@ export async function DELETE(
           role: user.role,
           departmentId: user.departmentId,
         }),
-        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        ipAddress: getRequestIp(request),
         userAgent: request.headers.get('user-agent') || undefined,
       },
     });
@@ -227,3 +230,4 @@ export async function DELETE(
     );
   }
 }
+

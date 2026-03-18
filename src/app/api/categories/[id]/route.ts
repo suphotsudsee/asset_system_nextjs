@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getRequestIp } from '@/lib/request-ip';
 import { getSessionFromCookie, verifyJWT } from '@/lib/auth';
 
 export async function GET(
@@ -121,7 +122,7 @@ export async function PUT(
           description: category.description,
         }),
         newValues: JSON.stringify({ name, code, description }),
-        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        ipAddress: getRequestIp(request),
         userAgent: request.headers.get('user-agent') || undefined,
       },
     });
@@ -185,7 +186,7 @@ export async function DELETE(
           code: category.code,
           description: category.description,
         }),
-        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        ipAddress: getRequestIp(request),
         userAgent: request.headers.get('user-agent') || undefined,
       },
     });
@@ -203,3 +204,4 @@ export async function DELETE(
     );
   }
 }
+

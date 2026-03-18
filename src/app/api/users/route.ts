@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getRequestIp } from '@/lib/request-ip';
 import { getSessionFromCookie, verifyJWT, hashPassword } from '@/lib/auth';
 
 // GET /api/users - List all users
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
       email: u.email,
       fullName: u.fullName,
       role: u.role,
+      departmentId: u.departmentId,
       department: u.department?.name ?? null,
       position: u.position,
       isActive: u.isActive,
@@ -146,7 +148,7 @@ export async function POST(request: NextRequest) {
           role,
           departmentId,
         }),
-        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        ipAddress: getRequestIp(request),
         userAgent: request.headers.get('user-agent') || undefined,
       },
     });
@@ -157,6 +159,7 @@ export async function POST(request: NextRequest) {
       email: user.email,
       fullName: user.fullName,
       role: user.role,
+      departmentId: user.departmentId,
       department: user.department?.name,
       position: user.position,
       isActive: user.isActive,
@@ -170,3 +173,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

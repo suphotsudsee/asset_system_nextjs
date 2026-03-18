@@ -13,6 +13,7 @@ export async function GET(
       where: { id: parseInt(id) },
       include: {
         category: true,
+        department: true,
       },
     });
 
@@ -31,7 +32,7 @@ export async function GET(
       purchaseDate: asset.purchaseDate,
       status: asset.status,
       condition: asset.condition,
-      department: asset.department,
+      department: asset.department?.name ?? null,
       location: asset.location,
       serialNumber: asset.serialNumber,
       category: asset.category ? {

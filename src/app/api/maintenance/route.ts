@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getRequestIp } from '@/lib/request-ip';
 import { getSessionFromCookie, verifyJWT } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -39,6 +40,8 @@ export async function POST(request: NextRequest) {
     const payload = await verifyJWT(session);
 
     const body = await request.json();
+    const laborCost = Number(body.laborCost || 0);
+    const partsCost = Number(body.partsCost || 0);
     const maintenance = await prisma.maintenanceRecord.create({
       data: {
         assetId: body.assetId,
@@ -47,11 +50,9 @@ export async function POST(request: NextRequest) {
         description: body.description,
         priority: body.priority,
         scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : null,
-        dueDate: body.dueDate ? new Date(body.dueDate) : null,
         status: body.status,
-        laborCost: body.laborCost || 0,
-        partsCost: body.partsCost || 0,
-        totalCost: (body.laborCost || 0) + (body.partsCost || 0),
+        laborCost,
+        totalCost: laborCost + partsCost,
         technicianName: body.technicianName,
       },
     });
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
           title: body.title,
           status: body.status,
         }),
-        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        ipAddress: getRequestIp(request),
         userAgent: request.headers.get('user-agent') || undefined,
       },
     });
@@ -80,3 +81,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create maintenance' }, { status: 500 });
   }
 }
+

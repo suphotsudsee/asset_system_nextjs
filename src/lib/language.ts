@@ -236,7 +236,7 @@ export function useAppLanguage() {
 
   return useMemo(() => {
     const t = (key: MessageKey, vars?: Record<string, string | number>) => {
-      let template = messages[language][key] ?? messages.th[key];
+      let template: string = messages[language][key] ?? messages.th[key];
 
       if (vars) {
         for (const [name, value] of Object.entries(vars)) {

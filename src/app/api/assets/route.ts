@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { AssetStatus } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { getRequestIp } from '@/lib/request-ip';
 import { getSessionFromCookie, verifyJWT } from '@/lib/auth';
 
 function getImageData(body: Record<string, unknown>): string | null {
@@ -17,6 +19,13 @@ function getImageData(body: Record<string, unknown>): string | null {
   }
 
   return null;
+}
+
+function parseAssetStatus(value: string | null) {
+  if (!value) return undefined;
+  return Object.values(AssetStatus).includes(value as AssetStatus)
+    ? (value as AssetStatus)
+    : undefined;
 }
 
 // GET /api/assets - List assets with pagination and filters
@@ -41,8 +50,9 @@ export async function GET(request: NextRequest) {
     const where: Prisma.AssetWhereInput = {};
 
     // Filters
-    if (status) {
-      where.status = status;
+    const parsedStatus = parseAssetStatus(status);
+    if (parsedStatus) {
+      where.status = parsedStatus;
     }
     if (category) {
       where.categoryId = parseInt(category);
@@ -192,7 +202,7 @@ export async function POST(request: NextRequest) {
           departmentId,
           status,
         }),
-        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        ipAddress: getRequestIp(request),
         userAgent: request.headers.get('user-agent') || undefined,
       },
     });
@@ -206,3 +216,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

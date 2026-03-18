@@ -26,22 +26,34 @@ export async function GET(
       return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
     }
 
+    const purchasePrice = asset.purchasePrice ?? 0;
+    const salvageValue = asset.salvageValue ?? 0;
+    const usefulLifeYears = asset.usefulLifeYears ?? 5;
+    const purchaseDate = asset.purchaseDate;
+
+    if (!purchaseDate || purchasePrice <= 0 || usefulLifeYears <= 0) {
+      return NextResponse.json(
+        { error: 'Asset does not have enough data for depreciation calculation' },
+        { status: 400 }
+      );
+    }
+
     // Calculate schedule based on method
     let schedule;
     if (asset.depreciationMethod === 'declining_balance') {
       schedule = calculateDecliningBalance({
-        purchasePrice: asset.purchasePrice,
-        salvageValue: asset.salvageValue,
-        usefulLifeYears: asset.usefulLifeYears,
-        purchaseDate: asset.purchaseDate,
+        purchasePrice,
+        salvageValue,
+        usefulLifeYears,
+        purchaseDate,
         method: 'declining_balance',
       });
     } else {
       schedule = calculateStraightLine({
-        purchasePrice: asset.purchasePrice,
-        salvageValue: asset.salvageValue,
-        usefulLifeYears: asset.usefulLifeYears,
-        purchaseDate: asset.purchaseDate,
+        purchasePrice,
+        salvageValue,
+        usefulLifeYears,
+        purchaseDate,
         method: 'straight_line',
       });
     }

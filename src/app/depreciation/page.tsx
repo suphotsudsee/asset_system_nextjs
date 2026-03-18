@@ -16,7 +16,7 @@ interface Depreciation {
   depreciationExpense: number;
   accumulatedDepreciation: number;
   endingBookValue: number;
-  depreciationMethod: string;
+  depreciationMethod: 'straight_line' | 'declining_balance';
   asset?: {
     assetCode: string;
     name: string;

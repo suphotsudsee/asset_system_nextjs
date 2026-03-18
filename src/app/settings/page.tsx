@@ -32,31 +32,31 @@ export default function SettingsPage() {
       id: 'departments',
       title: t('settingsDepartments'),
       description: t('settingsDepartmentsDesc'),
-      icon: '๐ข',
+      icon: '🏢',
       href: '/settings/departments',
     },
     {
       id: 'categories',
       title: t('settingsCategories'),
       description: t('settingsCategoriesDesc'),
-      icon: '๐“ฆ',
+      icon: '📦',
       href: '/settings/categories',
     },
     {
       id: 'users',
       title: t('settingsUsers'),
       description: t('settingsUsersDesc'),
-      icon: '๐‘ค',
+      icon: '👤',
       href: '/settings/users',
     },
     {
       id: 'import-csv',
-      title: language === 'th' ? 'เธเธณเน€เธเนเธฒ CSV' : 'Import CSV',
+      title: language === 'th' ? 'นำเข้า CSV' : 'Import CSV',
       description:
         language === 'th'
-          ? 'เธญเธฑเธเนเธซเธฅเธ”เนเธเธฅเน GLPI CSV เน€เธเธทเนเธญเธเธณเน€เธเนเธฒเธเธฃเธธเธ เธฑเธ“เธ‘เนเน€เธเนเธฒเธชเธนเนเธฃเธฐเธเธ'
+          ? 'อัปโหลดไฟล์ GLPI CSV เพื่อนำเข้าครุภัณฑ์เข้าสู่ระบบ'
           : 'Upload a GLPI CSV file to import assets into the system',
-      icon: '๐“ฅ',
+      icon: '📅',
       href: '/settings/import-csv',
     },
   ];
@@ -76,7 +76,7 @@ export default function SettingsPage() {
 
   const handleLanguageSave = () => {
     setLanguage(selectedLanguage);
-    setToast({ message: selectedLanguage === 'th' ? 'เธเธฑเธเธ—เธถเธเธ เธฒเธฉเธฒเน€เธฃเธตเธขเธเธฃเนเธญเธขเนเธฅเนเธง' : 'Language saved successfully', type: 'success' });
+    setToast({ message: selectedLanguage === 'th' ? 'บันทึกภาษาเรียบร้อยแล้ว' : 'Language saved successfully', type: 'success' });
   };
   const handlePublicQrBaseUrlSave = () => {
     const normalized = parsePublicQrBaseUrl(publicQrBaseUrl);

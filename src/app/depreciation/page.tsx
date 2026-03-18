@@ -179,6 +179,38 @@ export default function DepreciationPage() {
   );
 
   const currencyUnit = language === 'th' ? 'บาท' : 'THB';
+  const pageTitle = language === 'th' ? 'จัดการค่าเสื่อมราคา' : 'Depreciation Management';
+  const summaryLabels = {
+    totalOriginalValue: language === 'th' ? 'มูลค่าเริ่มต้นรวม' : 'Total Original Value',
+    accumulatedDepreciation: language === 'th' ? 'ค่าเสื่อมสะสม' : 'Accumulated Depreciation',
+    netBookValue: language === 'th' ? 'มูลค่าคงเหลือสุทธิ' : 'Net Book Value',
+    totalAssets: language === 'th' ? 'จำนวนครุภัณฑ์' : 'Total Assets',
+  };
+  const tableLabels = {
+    assetCode: language === 'th' ? 'รหัสครุภัณฑ์' : 'Asset Code',
+    assetName: language === 'th' ? 'ชื่อครุภัณฑ์' : 'Asset Name',
+    method: language === 'th' ? 'วิธีคิด' : 'Method',
+    originalValue: language === 'th' ? 'มูลค่าเริ่มต้น' : 'Original Value',
+    accumulated: language === 'th' ? 'ค่าเสื่อมสะสม' : 'Accumulated',
+    netBookValue: language === 'th' ? 'มูลค่าคงเหลือสุทธิ' : 'Net Book Value',
+  };
+  const methodsInfo = {
+    title: language === 'th' ? 'วิธีคิดค่าเสื่อมราคา' : 'Depreciation Methods',
+    straight: language === 'th'
+      ? 'เส้นตรง: ค่าเสื่อมเท่ากันทุกปี เหมาะกับครุภัณฑ์ราชการทั่วไป'
+      : 'Straight-Line: Equal depreciation each year (recommended for government assets)',
+    declining: language === 'th'
+      ? 'ยอดลดลง: ค่าเสื่อมสูงในช่วงปีแรก ๆ'
+      : 'Declining Balance: Higher depreciation in early years',
+  };
+  const modalLabels = {
+    title: language === 'th' ? 'ตารางค่าเสื่อมราคา' : 'Depreciation Schedule',
+    close: language === 'th' ? 'ปิด' : 'Close',
+    year: language === 'th' ? 'ปี' : 'Year',
+    depreciation: language === 'th' ? 'ค่าเสื่อม' : 'Depreciation',
+    accumulated: language === 'th' ? 'ค่าเสื่อมสะสม' : 'Accumulated',
+    netBookValue: language === 'th' ? 'มูลค่าคงเหลือสุทธิ' : 'Net Book Value',
+  };
 
   const scheduleChart = useMemo(() => {
     if (schedule.length === 0) return null;
@@ -242,24 +274,24 @@ export default function DepreciationPage() {
                 <circle cx="18" cy="8" r="1.2" fill="currentColor" stroke="none" />
               </svg>
             </div>
-            <h1 className="text-5xl font-black tracking-tight text-white">Depreciation Management</h1>
+            <h1 className="text-5xl font-black tracking-tight text-white">{pageTitle}</h1>
           </div>
 
           <section className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-              <p className="text-lg text-zinc-400">Total Original Value</p>
+              <p className="text-lg text-zinc-400">{summaryLabels.totalOriginalValue}</p>
               <p className="mt-4 text-4xl font-black text-indigo-400">{currencyFormatter.format(summary.totalOriginalValue)} {currencyUnit}</p>
             </div>
             <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-              <p className="text-lg text-zinc-400">Accumulated Depreciation</p>
+              <p className="text-lg text-zinc-400">{summaryLabels.accumulatedDepreciation}</p>
               <p className="mt-4 text-4xl font-black text-amber-400">{currencyFormatter.format(summary.accumulatedDepreciation)} {currencyUnit}</p>
             </div>
             <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-              <p className="text-lg text-zinc-400">Net Book Value</p>
+              <p className="text-lg text-zinc-400">{summaryLabels.netBookValue}</p>
               <p className="mt-4 text-4xl font-black text-emerald-400">{currencyFormatter.format(summary.netBookValue)} {currencyUnit}</p>
             </div>
             <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-              <p className="text-lg text-zinc-400">Total Assets</p>
+              <p className="text-lg text-zinc-400">{summaryLabels.totalAssets}</p>
               <p className="mt-4 text-4xl font-black text-white">{summary.totalAssets}</p>
             </div>
           </section>
@@ -324,12 +356,12 @@ export default function DepreciationPage() {
               <table className="min-w-full border-collapse">
                 <thead className="bg-[#2d2d2d] text-left">
                   <tr className="text-lg text-zinc-400">
-                    <th className="px-4 py-5 font-semibold">Asset Code</th>
-                    <th className="px-4 py-5 font-semibold">Asset Name</th>
-                    <th className="px-4 py-5 font-semibold">Method</th>
-                    <th className="px-4 py-5 text-right font-semibold">Original Value</th>
-                    <th className="px-4 py-5 text-right font-semibold">Accumulated</th>
-                    <th className="px-4 py-5 text-right font-semibold">Net Book Value</th>
+                    <th className="px-4 py-5 font-semibold">{tableLabels.assetCode}</th>
+                    <th className="px-4 py-5 font-semibold">{tableLabels.assetName}</th>
+                    <th className="px-4 py-5 font-semibold">{tableLabels.method}</th>
+                    <th className="px-4 py-5 text-right font-semibold">{tableLabels.originalValue}</th>
+                    <th className="px-4 py-5 text-right font-semibold">{tableLabels.accumulated}</th>
+                    <th className="px-4 py-5 text-right font-semibold">{tableLabels.netBookValue}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -383,12 +415,12 @@ export default function DepreciationPage() {
             <div className="flex items-start gap-3">
               <span className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-400/15 text-amber-300">i</span>
               <div>
-                <h2 className="text-2xl font-bold text-white">Depreciation Methods</h2>
+                <h2 className="text-2xl font-bold text-white">{methodsInfo.title}</h2>
                 <p className="mt-3 text-lg text-zinc-400">
-                  <span className="font-semibold text-zinc-300">Straight-Line:</span> Equal depreciation each year (recommended for government assets)
+                  {methodsInfo.straight}
                 </p>
                 <p className="mt-1 text-lg text-zinc-400">
-                  <span className="font-semibold text-zinc-300">Declining Balance:</span> Higher depreciation in early years
+                  {methodsInfo.declining}
                 </p>
               </div>
             </div>
@@ -399,14 +431,14 @@ export default function DepreciationPage() {
       <Modal
         isOpen={scheduleModalOpen}
         onClose={() => setScheduleModalOpen(false)}
-        title="Depreciation Schedule"
+        title={modalLabels.title}
         footer={
           <button
             type="button"
             onClick={() => setScheduleModalOpen(false)}
             className="rounded-lg bg-gray-700 px-4 py-2 text-white transition-colors hover:bg-gray-600"
           >
-            Close
+            {modalLabels.close}
           </button>
         }
       >
@@ -472,10 +504,10 @@ export default function DepreciationPage() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-gray-700">
               <tr>
-                <th className="px-4 py-2 text-left text-gray-300">Year</th>
-                <th className="px-4 py-2 text-right text-gray-300">Depreciation</th>
-                <th className="px-4 py-2 text-right text-gray-300">Accumulated</th>
-                <th className="px-4 py-2 text-right text-gray-300">Net Book Value</th>
+                <th className="px-4 py-2 text-left text-gray-300">{modalLabels.year}</th>
+                <th className="px-4 py-2 text-right text-gray-300">{modalLabels.depreciation}</th>
+                <th className="px-4 py-2 text-right text-gray-300">{modalLabels.accumulated}</th>
+                <th className="px-4 py-2 text-right text-gray-300">{modalLabels.netBookValue}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">

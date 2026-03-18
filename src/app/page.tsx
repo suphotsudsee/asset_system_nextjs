@@ -36,7 +36,7 @@ export default function LoginPage() {
       } else {
         setError(data.message || 'Login failed');
       }
-    } catch (err) {
+    } catch {
       setError('Connection error');
     } finally {
       setLoading(false);
@@ -59,7 +59,7 @@ export default function LoginPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-              placeholder="admin"
+              placeholder=""
               required
             />
           </div>
@@ -71,7 +71,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-              placeholder="admin123"
+              placeholder=""
               required
             />
           </div>
@@ -91,9 +91,6 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-gray-400 text-sm">
-          <p>Demo: admin / admin123</p>
-        </div>
       </div>
 
       {success && (

@@ -23,6 +23,7 @@ interface AssetCardProps {
 
 export default function AssetCard({ asset }: AssetCardProps) {
   const assetImage = asset.image ?? asset.imageData ?? null;
+  const qrImageUrl = `/api/qr/${asset.id}/image?rev=offline-v2`;
 
   const statusColors: Record<string, string> = {
     active: 'bg-green-500',
@@ -104,9 +105,9 @@ export default function AssetCard({ asset }: AssetCardProps) {
           <p className="text-gray-400 text-xs mb-2">QR Code</p>
           <div className="flex items-center space-x-3">
             <div className="w-16 h-16 bg-white rounded p-1">
-              <a href={`/api/qr/${asset.id}/image`} target="_blank" className="block">
+              <a href={qrImageUrl} target="_blank" className="block">
                 <img
-                  src={`/api/qr/${asset.id}/image`}
+                  src={qrImageUrl}
                   alt="QR Code"
                   className="w-full h-full object-contain"
                   onError={(e) => {

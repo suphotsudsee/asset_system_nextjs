@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
 import Modal from '../../components/Modal';
+import { useAppLanguage } from '@/lib/language';
 
 interface Depreciation {
   id: number;
@@ -41,12 +42,8 @@ const methodStyles: Record<string, string> = {
   declining_balance: 'bg-amber-950 text-amber-400',
 };
 
-const methodLabels: Record<string, string> = {
-  straight_line: 'straight-line',
-  declining_balance: 'declining',
-};
-
 export default function DepreciationPage() {
+  const { language } = useAppLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [depreciations, setDepreciations] = useState<Depreciation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,6 +120,58 @@ export default function DepreciationPage() {
     );
   }, [filteredDepreciations]);
 
+  const methodLabels = useMemo(
+    () => ({
+      straight_line: language === 'th' ? 'เส้นตรง' : 'Straight-Line',
+      declining_balance: language === 'th' ? 'ยอดลดลง' : 'Declining Balance',
+    }),
+    [language]
+  );
+
+  const scheduleChart = useMemo(() => {
+    if (schedule.length === 0) return null;
+
+    const width = 760;
+    const height = 260;
+    const padding = 32;
+    const maxValue = Math.max(
+      ...schedule.flatMap((row) => [
+        row.depreciationExpense,
+        row.accumulatedDepreciation,
+        row.endingBookValue,
+      ]),
+      1
+    );
+
+    const getX = (index: number) => {
+      if (schedule.length === 1) return width / 2;
+      return padding + (index * (width - padding * 2)) / (schedule.length - 1);
+    };
+
+    const getY = (value: number) => height - padding - (value / maxValue) * (height - padding * 2);
+
+    const toPath = (values: number[]) =>
+      values
+        .map((value, index) => `${index === 0 ? 'M' : 'L'} ${getX(index).toFixed(2)} ${getY(value).toFixed(2)}`)
+        .join(' ');
+
+    return {
+      width,
+      height,
+      maxValue,
+      depreciationPath: toPath(schedule.map((row) => row.depreciationExpense)),
+      accumulatedPath: toPath(schedule.map((row) => row.accumulatedDepreciation)),
+      bookValuePath: toPath(schedule.map((row) => row.endingBookValue)),
+      points: schedule.map((row, index) => ({
+        year: row.year,
+        x: getX(index),
+        depreciationY: getY(row.depreciationExpense),
+        accumulatedY: getY(row.accumulatedDepreciation),
+        bookValueY: getY(row.endingBookValue),
+      })),
+    };
+  }, [schedule]);
+
   return (
     <div className="min-h-screen bg-[#252525] text-white">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -157,15 +206,15 @@ export default function DepreciationPage() {
 
           <section className="mb-6 rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <label className="text-2xl text-zinc-400">Filter by Method:</label>
+              <label className="text-2xl text-zinc-400">{language === 'th' ? 'กรองตามวิธีคิดค่าเสื่อม:' : 'Filter by Method:'}</label>
               <select
                 value={methodFilter}
                 onChange={(e) => setMethodFilter(e.target.value)}
                 className="w-full max-w-xs rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
               >
-                <option value="">All Methods</option>
-                <option value="straight_line">Straight-Line</option>
-                <option value="declining_balance">Declining Balance</option>
+                <option value="">{language === 'th' ? 'ทุกวิธี' : 'All Methods'}</option>
+                <option value="straight_line">{methodLabels.straight_line}</option>
+                <option value="declining_balance">{methodLabels.declining_balance}</option>
               </select>
             </div>
           </section>
@@ -268,6 +317,56 @@ export default function DepreciationPage() {
             </p>
           )}
         </div>
+
+        {scheduleChart && (
+          <div className="mb-6 rounded-xl border border-gray-700 bg-[#1f2937] p-4">
+            <div className="mb-4 flex flex-wrap gap-4 text-sm">
+              <span className="inline-flex items-center gap-2 text-blue-300">
+                <span className="h-2.5 w-2.5 rounded-full bg-blue-400" />
+                {language === 'th' ? 'ค่าเสื่อมต่อปี' : 'Depreciation'}
+              </span>
+              <span className="inline-flex items-center gap-2 text-amber-300">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                {language === 'th' ? 'ค่าเสื่อมสะสม' : 'Accumulated'}
+              </span>
+              <span className="inline-flex items-center gap-2 text-emerald-300">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                {language === 'th' ? 'มูลค่าคงเหลือสุทธิ' : 'Net Book Value'}
+              </span>
+            </div>
+
+            <svg viewBox={`0 0 ${scheduleChart.width} ${scheduleChart.height}`} className="w-full overflow-visible">
+              {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
+                const y = scheduleChart.height - 32 - tick * (scheduleChart.height - 64);
+                const label = Math.round(scheduleChart.maxValue * tick);
+
+                return (
+                  <g key={tick}>
+                    <line x1="32" y1={y} x2={scheduleChart.width - 32} y2={y} stroke="rgba(148,163,184,0.18)" strokeWidth="1" />
+                    <text x="8" y={y + 4} fill="#94a3b8" fontSize="12">
+                      {currencyFormatter.format(label)}
+                    </text>
+                  </g>
+                );
+              })}
+
+              <path d={scheduleChart.depreciationPath} fill="none" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" />
+              <path d={scheduleChart.accumulatedPath} fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
+              <path d={scheduleChart.bookValuePath} fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" />
+
+              {scheduleChart.points.map((point) => (
+                <g key={point.year}>
+                  <circle cx={point.x} cy={point.depreciationY} r="4" fill="#60a5fa" />
+                  <circle cx={point.x} cy={point.accumulatedY} r="4" fill="#f59e0b" />
+                  <circle cx={point.x} cy={point.bookValueY} r="4" fill="#34d399" />
+                  <text x={point.x} y={scheduleChart.height - 8} textAnchor="middle" fill="#94a3b8" fontSize="12">
+                    {point.year}
+                  </text>
+                </g>
+              ))}
+            </svg>
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

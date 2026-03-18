@@ -1,14 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
 import Modal from '../../components/Modal';
 import Toast from '../../components/Toast';
+import { useAppLanguage } from '@/lib/language';
 
 interface Category {
+  id: number;
+  name: string;
+  code: string;
+}
+
+interface Department {
   id: number;
   name: string;
   code: string;
@@ -41,43 +48,29 @@ interface AssetsResponse {
   };
 }
 
-const numberFormatter = new Intl.NumberFormat('th-TH');
-
-const statusMap: Record<string, { label: string; className: string }> = {
-  active: {
-    label: 'active',
-    className: 'bg-emerald-950 text-emerald-400',
-  },
-  inactive: {
-    label: 'inactive',
-    className: 'bg-zinc-800 text-zinc-300',
-  },
-  maintenance: {
-    label: 'maintenance',
-    className: 'bg-amber-950 text-amber-400',
-  },
-  disposed: {
-    label: 'disposed',
-    className: 'bg-rose-950 text-rose-400',
-  },
-};
-
 export default function AssetsPage() {
+  const { language, locale, t } = useAppLanguage();
+  const qrRevision = 'offline-v2';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const router = useRouter();
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -91,16 +84,29 @@ export default function AssetsPage() {
     }
   }, []);
 
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const res = await fetch('/api/departments');
+      if (!res.ok) return;
+
+      const data = await res.json();
+      setDepartments(data);
+    } catch {
+      console.error('Failed to fetch departments');
+    }
+  }, []);
+
   const fetchAssets = useCallback(async () => {
     setLoading(true);
 
     try {
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '10',
+        limit: rowsPerPage.toString(),
         ...(search ? { search } : {}),
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(categoryFilter ? { category: categoryFilter } : {}),
+        ...(departmentFilter ? { department: departmentFilter } : {}),
       });
 
       const res = await fetch(`/api/assets?${params}`);
@@ -110,12 +116,13 @@ export default function AssetsPage() {
       setAssets(data.assets);
       setSelectedAssetIds((current) => current.filter((id) => data.assets.some((asset) => asset.id === id)));
       setTotalPages(data.pagination?.totalPages ?? 1);
+      setTotalRecords(data.pagination?.total ?? 0);
     } catch {
       console.error('Failed to fetch assets');
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter, page, search, statusFilter]);
+  }, [categoryFilter, departmentFilter, page, rowsPerPage, search, statusFilter]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -124,8 +131,8 @@ export default function AssetsPage() {
       return;
     }
 
-    void fetchCategories();
-  }, [fetchCategories, router]);
+    void Promise.all([fetchCategories(), fetchDepartments()]);
+  }, [fetchCategories, fetchDepartments, router]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -133,6 +140,21 @@ export default function AssetsPage() {
 
     void fetchAssets();
   }, [fetchAssets]);
+
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'active':
+        return { label: t('statusActive'), className: 'bg-emerald-950 text-emerald-400' };
+      case 'inactive':
+        return { label: t('statusInactive'), className: 'bg-zinc-800 text-zinc-300' };
+      case 'maintenance':
+        return { label: t('statusMaintenance'), className: 'bg-amber-950 text-amber-400' };
+      case 'disposed':
+        return { label: t('statusDisposed'), className: 'bg-rose-950 text-rose-400' };
+      default:
+        return { label: status || '-', className: 'bg-zinc-800 text-zinc-300' };
+    }
+  };
 
   const handleDeleteRequest = (asset: Asset) => {
     setAssetToDelete(asset);
@@ -145,15 +167,15 @@ export default function AssetsPage() {
     try {
       const res = await fetch(`/api/assets/${assetToDelete.id}`, { method: 'DELETE' });
       if (res.ok) {
-        setToast({ message: 'ลบครุภัณฑ์สำเร็จ', type: 'success' });
+        setToast({ message: t('assetsDeleteSuccess'), type: 'success' });
         setAssets((current) => current.filter((asset) => asset.id !== assetToDelete.id));
         setSelectedAssetIds((current) => current.filter((id) => id !== assetToDelete.id));
         void fetchAssets();
       } else {
-        setToast({ message: 'ลบครุภัณฑ์ไม่สำเร็จ', type: 'error' });
+        setToast({ message: t('assetsDeleteFailed'), type: 'error' });
       }
     } catch {
-      setToast({ message: 'เกิดข้อผิดพลาด', type: 'error' });
+      setToast({ message: t('assetsUnexpectedError'), type: 'error' });
     } finally {
       setDeleteModalOpen(false);
       setAssetToDelete(null);
@@ -186,11 +208,11 @@ export default function AssetsPage() {
   const handlePrintQr = (asset: Asset) => {
     const printWindow = window.open('', '_blank', 'width=420,height=640');
     if (!printWindow) {
-      setToast({ message: 'ไม่สามารถเปิดหน้าต่างพิมพ์ได้', type: 'error' });
+      setToast({ message: t('assetsPrintPopupError'), type: 'error' });
       return;
     }
 
-    const qrImageUrl = `${window.location.origin}/api/qr/${asset.id}/image`;
+    const qrImageUrl = `${window.location.origin}/api/qr/${asset.id}/image?rev=${qrRevision}`;
     const escapedName = asset.name.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     const escapedCode = asset.assetCode.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
@@ -214,7 +236,7 @@ export default function AssetsPage() {
             <div class="title">${escapedName}</div>
             <div class="code">${escapedCode}</div>
             <img src="${qrImageUrl}" alt="QR Code for ${escapedCode}" />
-            <div class="hint">Scan this QR code to open asset information.</div>
+            <div class="hint">${t('assetsPrintHint')}</div>
           </div>
           <script>
             window.addEventListener('load', function () { window.print(); });
@@ -228,28 +250,43 @@ export default function AssetsPage() {
   const handleBulkPrintQr = () => {
     const selectedAssets = assets.filter((asset) => selectedAssetIds.includes(asset.id));
     if (selectedAssets.length === 0) {
-      setToast({ message: 'กรุณาเลือกครุภัณฑ์ก่อนพิมพ์', type: 'info' });
+      setToast({ message: t('assetsSelectBeforePrint'), type: 'info' });
       return;
     }
 
     const printWindow = window.open('', '_blank', 'width=1000,height=1400');
     if (!printWindow) {
-      setToast({ message: 'ไม่สามารถเปิดหน้าต่างพิมพ์ได้', type: 'error' });
+      setToast({ message: t('assetsPrintPopupError'), type: 'error' });
       return;
     }
 
-    const labels = selectedAssets
-      .map((asset) => {
-        const escapedName = asset.name.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-        const escapedCode = asset.assetCode.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-        const qrImageUrl = `${window.location.origin}/api/qr/${asset.id}/image`;
+    const pageSize = 20;
+    const pages = Array.from({ length: Math.ceil(selectedAssets.length / pageSize) }, (_, index) =>
+      selectedAssets.slice(index * pageSize, (index + 1) * pageSize)
+    );
+
+    const pageMarkup = pages
+      .map((pageAssets) => {
+        const labels = pageAssets
+          .map((asset) => {
+            const escapedName = asset.name.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+            const escapedCode = asset.assetCode.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+            const qrImageUrl = `${window.location.origin}/api/qr/${asset.id}/image?rev=${qrRevision}`;
+
+            return `
+              <div class="label">
+                <div class="asset-name">${escapedName}</div>
+                <div class="asset-code">${escapedCode}</div>
+                <img src="${qrImageUrl}" alt="QR Code for ${escapedCode}" />
+              </div>
+            `;
+          })
+          .join('');
 
         return `
-          <div class="label">
-            <div class="asset-name">${escapedName}</div>
-            <div class="asset-code">${escapedCode}</div>
-            <img src="${qrImageUrl}" alt="QR Code for ${escapedCode}" />
-          </div>
+          <section class="sheet">
+            <div class="grid">${labels}</div>
+          </section>
         `;
       })
       .join('');
@@ -260,20 +297,39 @@ export default function AssetsPage() {
         <head>
           <title>Print Asset QR Codes</title>
           <style>
-            @page { size: A4 portrait; margin: 10mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             body { margin: 0; font-family: Arial, sans-serif; background: #ffffff; color: #111827; }
-            .sheet { width: 190mm; margin: 0 auto; }
-            .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8mm; }
-            .label { border: 1px solid #d4d4d8; border-radius: 10px; padding: 6mm 4mm; text-align: center; break-inside: avoid; }
-            .asset-name { font-size: 14px; font-weight: 700; line-height: 1.3; min-height: 36px; }
-            .asset-code { margin-top: 4px; font-size: 12px; color: #4f46e5; }
-            img { width: 42mm; height: 42mm; display: block; margin: 6px auto 0; }
+            .sheet { width: 194mm; min-height: 280mm; margin: 0 auto; page-break-after: always; break-after: page; }
+            .sheet:last-child { page-break-after: auto; break-after: auto; }
+            .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; }
+            .label {
+              height: 52mm;
+              border: 1px solid #d4d4d8;
+              border-radius: 6px;
+              padding: 3mm 2.5mm;
+              text-align: center;
+              box-sizing: border-box;
+              break-inside: avoid;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: flex-start;
+            }
+            .asset-name {
+              font-size: 10px;
+              font-weight: 700;
+              line-height: 1.2;
+              min-height: 24px;
+              max-height: 24px;
+              width: 100%;
+              overflow: hidden;
+            }
+            .asset-code { margin-top: 2px; font-size: 9px; color: #4f46e5; line-height: 1.2; }
+            img { width: 28mm; height: 28mm; display: block; margin: 3mm auto 0; }
           </style>
         </head>
         <body>
-          <div class="sheet">
-            <div class="grid">${labels}</div>
-          </div>
+          ${pageMarkup}
           <script>
             window.addEventListener('load', function () { window.print(); });
           </script>
@@ -282,12 +338,6 @@ export default function AssetsPage() {
     `);
     printWindow.document.close();
   };
-
-  const statusConfig = (status: string) =>
-    statusMap[status] ?? {
-      label: status || 'unknown',
-      className: 'bg-zinc-800 text-zinc-300',
-    };
 
   const allVisibleSelected = assets.length > 0 && assets.every((asset) => selectedAssetIds.includes(asset.id));
 
@@ -303,7 +353,7 @@ export default function AssetsPage() {
             <div className="flex items-center gap-5">
               <div className="text-6xl">📦</div>
               <div>
-                <h1 className="text-5xl font-black tracking-tight text-white">Assets Management</h1>
+                <h1 className="text-5xl font-black tracking-tight text-white">{t('assetsTitle')}</h1>
               </div>
             </div>
 
@@ -312,17 +362,17 @@ export default function AssetsPage() {
               className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-7 py-4 text-xl font-bold text-white transition-colors hover:bg-emerald-400"
             >
               <span className="mr-3 text-2xl text-violet-300">＋</span>
-              Add New Asset
+              {t('assetsAddNew')}
             </Link>
           </div>
 
           <section className="mb-6 rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
               <form onSubmit={handleSearchSubmit} className="space-y-3">
-                <label className="block text-xl text-zinc-400">Search</label>
+                <label className="block text-xl text-zinc-400">{t('assetsSearch')}</label>
                 <input
                   type="text"
-                  placeholder="Search by name or code..."
+                  placeholder={t('assetsSearchPlaceholder')}
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   className="w-full rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors placeholder:text-zinc-500 focus:border-indigo-500"
@@ -330,7 +380,7 @@ export default function AssetsPage() {
               </form>
 
               <div className="space-y-3">
-                <label className="block text-xl text-zinc-400">Category</label>
+                <label className="block text-xl text-zinc-400">{t('assetsCategory')}</label>
                 <select
                   value={categoryFilter}
                   onChange={(e) => {
@@ -339,7 +389,7 @@ export default function AssetsPage() {
                   }}
                   className="w-full rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
                 >
-                  <option value="">All Categories</option>
+                  <option value="">{t('assetsAllCategories')}</option>
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
@@ -349,7 +399,7 @@ export default function AssetsPage() {
               </div>
 
               <div className="space-y-3">
-                <label className="block text-xl text-zinc-400">Status</label>
+                <label className="block text-xl text-zinc-400">{t('assetsStatus')}</label>
                 <select
                   value={statusFilter}
                   onChange={(e) => {
@@ -358,26 +408,43 @@ export default function AssetsPage() {
                   }}
                   className="w-full rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
                 >
-                  <option value="">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="maintenance">Maintenance</option>
-                  <option value="disposed">Disposed</option>
+                  <option value="">{t('assetsAllStatus')}</option>
+                  <option value="active">{t('statusActive')}</option>
+                  <option value="inactive">{t('statusInactive')}</option>
+                  <option value="maintenance">{t('statusMaintenance')}</option>
+                  <option value="disposed">{t('statusDisposed')}</option>
+                </select>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-xl text-zinc-400">{language === 'th' ? 'หน่วยงาน' : 'Department'}</label>
+                <select
+                  value={departmentFilter}
+                  onChange={(e) => {
+                    setPage(1);
+                    setDepartmentFilter(e.target.value);
+                  }}
+                  className="w-full rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
+                >
+                  <option value="">{language === 'th' ? 'ทุกหน่วยงาน' : 'All Departments'}</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
           </section>
 
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-zinc-400">
-              Selected: {selectedAssetIds.length} item{selectedAssetIds.length === 1 ? '' : 's'}
-            </p>
+            <p className="text-sm text-zinc-400">{t('assetsSelected', { count: selectedAssetIds.length })}</p>
             <button
               type="button"
               onClick={handleBulkPrintQr}
               className="rounded-lg bg-indigo-500 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-indigo-400"
             >
-              Print Selected QR (A4)
+              {t('assetsPrintSelected')}
             </button>
           </div>
 
@@ -394,13 +461,13 @@ export default function AssetsPage() {
                         className="h-4 w-4 rounded border-white/20 bg-[#252525]"
                       />
                     </th>
-                    <th className="px-4 py-5 font-semibold">Asset Code</th>
-                    <th className="px-4 py-5 font-semibold">Name</th>
-                    <th className="px-4 py-5 font-semibold">Category</th>
-                    <th className="px-4 py-5 font-semibold">Department</th>
-                    <th className="px-4 py-5 font-semibold">Status</th>
-                    <th className="px-4 py-5 text-right font-semibold">Price</th>
-                    <th className="px-4 py-5 text-right font-semibold">Actions</th>
+                    <th className="px-4 py-5 font-semibold">{t('assetsAssetCode')}</th>
+                    <th className="px-4 py-5 font-semibold">{t('assetsName')}</th>
+                    <th className="px-4 py-5 font-semibold">{t('assetsCategory')}</th>
+                    <th className="px-4 py-5 font-semibold">{t('assetsDepartment')}</th>
+                    <th className="px-4 py-5 font-semibold">{t('assetsStatus')}</th>
+                    <th className="px-4 py-5 text-right font-semibold">{t('assetsPrice')}</th>
+                    <th className="px-4 py-5 text-right font-semibold">{t('assetsActions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -415,12 +482,12 @@ export default function AssetsPage() {
                   ) : assets.length === 0 ? (
                     <tr className="border-t border-white/5">
                       <td colSpan={8} className="px-4 py-14 text-center text-lg text-zinc-500">
-                        ไม่พบข้อมูลครุภัณฑ์
+                        {t('assetsNoData')}
                       </td>
                     </tr>
                   ) : (
                     assets.map((asset) => {
-                      const status = statusConfig(asset.status);
+                      const status = getStatusConfig(asset.status);
 
                       return (
                         <tr key={asset.id} className="border-t border-white/5 text-lg text-white">
@@ -451,24 +518,24 @@ export default function AssetsPage() {
                           <td className="px-4 py-6 text-right align-middle">
                             <div className="flex items-center justify-end gap-6">
                               <Link href={`/assets/${asset.id}`} className="font-semibold text-indigo-400 hover:text-indigo-300">
-                                View
+                                {t('assetsView')}
                               </Link>
                               <button
                                 type="button"
                                 onClick={() => handlePrintQr(asset)}
                                 className="font-semibold text-emerald-400 hover:text-emerald-300"
                               >
-                                Print QR
+                                {t('assetsPrintQr')}
                               </button>
                               <Link href={`/assets/${asset.id}/edit`} className="font-semibold text-indigo-400 hover:text-indigo-300">
-                                Edit
+                                {t('assetsEdit')}
                               </Link>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteRequest(asset)}
                                 className="font-semibold text-red-500 hover:text-red-400"
                               >
-                                Delete
+                                {t('assetsDelete')}
                               </button>
                             </div>
                           </td>
@@ -481,17 +548,41 @@ export default function AssetsPage() {
             </div>
 
             <div className="flex flex-col gap-4 border-t border-white/5 px-6 py-5 text-zinc-400 md:flex-row md:items-center md:justify-between">
-              <p className="text-base">
-                Page {page} of {Math.max(totalPages, 1)}
-              </p>
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+                <p className="text-base">{t('assetsPageOf', { page, total: Math.max(totalPages, 1) })}</p>
+                <p className="text-sm text-zinc-500">
+                  {language === 'th'
+                    ? `ทั้งหมด ${numberFormatter.format(totalRecords)} รายการ`
+                    : `${numberFormatter.format(totalRecords)} total record(s)`}
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-zinc-400">
+                    {language === 'th' ? 'แสดงต่อหน้า' : 'Rows per page'}
+                  </label>
+                  <select
+                    value={rowsPerPage}
+                    onChange={(e) => {
+                      setPage(1);
+                      setRowsPerPage(parseInt(e.target.value, 10));
+                    }}
+                    className="rounded-lg border border-white/10 bg-[#252525] px-3 py-2 text-sm font-semibold text-zinc-300 outline-none transition-colors focus:border-indigo-500"
+                  >
+                    {[10, 20, 50, 100].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   type="button"
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                   disabled={page <= 1}
                   className="rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-zinc-300 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Previous
+                  {t('assetsPrevious')}
                 </button>
                 <button
                   type="button"
@@ -499,7 +590,7 @@ export default function AssetsPage() {
                   disabled={page >= totalPages}
                   className="rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-zinc-300 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Next
+                  {t('assetsNext')}
                 </button>
               </div>
             </div>
@@ -510,7 +601,7 @@ export default function AssetsPage() {
       <Modal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
-        title="ยืนยันการลบ"
+        title={t('assetsDeleteTitle')}
         footer={
           <div className="flex justify-end space-x-3">
             <button
@@ -518,23 +609,19 @@ export default function AssetsPage() {
               onClick={() => setDeleteModalOpen(false)}
               className="rounded-lg bg-gray-700 px-4 py-2 text-white transition-colors hover:bg-gray-600"
             >
-              ยกเลิก
+              {t('assetsDeleteCancel')}
             </button>
             <button
               type="button"
               onClick={handleDelete}
               className="rounded-lg bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-500"
             >
-              ลบ
+              {t('assetsDeleteConfirm')}
             </button>
           </div>
         }
       >
-        <p className="text-gray-300">
-          คุณต้องการลบครุภัณฑ์
-          {assetToDelete ? ` "${assetToDelete.name}"` : ''}
-          ใช่หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้
-        </p>
+        <p className="text-gray-300">{t('assetsDeletePrompt', { name: assetToDelete?.name || '' })}</p>
       </Modal>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

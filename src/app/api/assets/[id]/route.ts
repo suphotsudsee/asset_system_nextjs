@@ -228,9 +228,23 @@ export async function DELETE(
       },
     });
 
-    await prisma.asset.delete({
-      where: { id: parseInt(id) },
-    });
+    await prisma.$transaction([
+      prisma.qRCode.deleteMany({
+        where: { assetId: asset.id },
+      }),
+      prisma.depreciationRecord.deleteMany({
+        where: { assetId: asset.id },
+      }),
+      prisma.maintenanceRecord.deleteMany({
+        where: { assetId: asset.id },
+      }),
+      prisma.assetTransaction.deleteMany({
+        where: { assetId: asset.id },
+      }),
+      prisma.asset.delete({
+        where: { id: parseInt(id) },
+      }),
+    ]);
 
     return NextResponse.json({ message: 'Asset deleted' });
   } catch (error) {

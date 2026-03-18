@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Sidebar from '../../../../components/Sidebar';
 import Header from '../../../../components/Header';
 import Toast from '../../../../components/Toast';
+import { useAppLanguage } from '../../../../lib/language';
 
 interface Category {
   id: number;
@@ -134,6 +135,7 @@ export default function EditAssetPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const { language } = useAppLanguage();
 
   const updateFormData = <K extends keyof AssetFormData>(field: K, value: AssetFormData[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -392,14 +394,16 @@ export default function EditAssetPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-zinc-300">Depreciation Method</label>
+                <label className="mb-2 block text-sm font-medium text-zinc-300">
+                  {language === 'th' ? 'วิธีคิดค่าเสื่อมราคา' : 'Depreciation Method'}
+                </label>
                 <select
                   value={formData.depreciationMethod}
                   onChange={(e) => updateFormData('depreciationMethod', e.target.value)}
                   className="w-full rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-white outline-none transition-colors focus:border-indigo-500"
                 >
-                  <option value="straight_line">Straight Line</option>
-                  <option value="declining_balance">Declining Balance</option>
+                  <option value="straight_line">{language === 'th' ? 'เส้นตรง' : 'Straight Line'}</option>
+                  <option value="declining_balance">{language === 'th' ? 'ยอดลดลง' : 'Declining Balance'}</option>
                 </select>
               </div>
 

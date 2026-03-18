@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
+import { useAppLanguage } from '@/lib/language';
 
 interface Stats {
   totalAssets: number;
@@ -19,9 +20,8 @@ interface UserProfile {
   fullName?: string | null;
 }
 
-const numberFormatter = new Intl.NumberFormat('th-TH');
-
 export default function DashboardPage() {
+  const { locale, t } = useAppLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,6 +31,7 @@ export default function DashboardPage() {
     () => localStorage.getItem('user'),
     () => null
   );
+
   const user = useMemo<UserProfile | null>(() => {
     if (!userSnapshot) return null;
 
@@ -41,6 +42,8 @@ export default function DashboardPage() {
     }
   }, [userSnapshot]);
 
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
 
@@ -49,83 +52,35 @@ export default function DashboardPage() {
       return;
     }
 
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/dashboard/stats');
+        if (res.ok) {
+          const data = await res.json();
+          setStats(data);
+        }
+      } catch {
+        console.error('Failed to fetch stats');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     void fetchStats();
   }, [router]);
 
-  const fetchStats = async () => {
-    try {
-      const res = await fetch('/api/dashboard/stats');
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
-    } catch {
-      console.error('Failed to fetch stats');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const statCards = [
-    {
-      title: 'Total Assets',
-      subtitle: 'ครุภัณฑ์ทั้งหมด',
-      value: numberFormatter.format(stats?.totalAssets ?? 0),
-      icon: '📦',
-      valueClassName: 'text-white',
-    },
-    {
-      title: 'Active Assets',
-      subtitle: 'พร้อมใช้งาน',
-      value: numberFormatter.format(stats?.activeAssets ?? 0),
-      icon: '✅',
-      valueClassName: 'text-emerald-400',
-    },
-    {
-      title: 'Maintenance Pending',
-      subtitle: 'รอดำเนินการ',
-      value: numberFormatter.format(stats?.maintenancePending ?? 0),
-      icon: '🔧',
-      valueClassName: 'text-amber-400',
-    },
-    {
-      title: 'Total Value',
-      subtitle: 'มูลค่ารวม',
-      value: `${numberFormatter.format(stats?.totalValue ?? 0)} ฿`,
-      icon: '💰',
-      valueClassName: 'text-indigo-400',
-    },
+    { title: t('dashboardTotalAssets'), value: numberFormatter.format(stats?.totalAssets ?? 0), icon: '📦', valueClassName: 'text-white' },
+    { title: t('dashboardActiveAssets'), value: numberFormatter.format(stats?.activeAssets ?? 0), icon: '✅', valueClassName: 'text-emerald-400' },
+    { title: t('dashboardMaintenancePending'), value: numberFormatter.format(stats?.maintenancePending ?? 0), icon: '🔧', valueClassName: 'text-amber-400' },
+    { title: t('dashboardTotalValue'), value: `${numberFormatter.format(stats?.totalValue ?? 0)} ฿`, icon: '💰', valueClassName: 'text-indigo-400' },
   ];
 
   const quickActions = [
-    {
-      href: '/assets/add',
-      title: 'Add Asset',
-      description: 'Create new asset',
-      icon: '➕',
-      accentClassName: 'text-violet-400',
-    },
-    {
-      href: '/assets',
-      title: 'View Assets',
-      description: 'Browse all assets',
-      icon: '📋',
-      accentClassName: 'text-amber-300',
-    },
-    {
-      href: '/qr-scanner',
-      title: 'Scan QR',
-      description: 'Scan asset QR code',
-      icon: '📷',
-      accentClassName: 'text-slate-300',
-    },
-    {
-      href: '/reports',
-      title: 'Reports',
-      description: 'View analytics',
-      icon: '📊',
-      accentClassName: 'text-sky-300',
-    },
+    { href: '/assets/add', title: t('dashboardAddAsset'), description: t('dashboardAddAssetDesc'), icon: '✚', accentClassName: 'text-violet-400' },
+    { href: '/assets', title: t('dashboardViewAssets'), description: t('dashboardViewAssetsDesc'), icon: '📋', accentClassName: 'text-amber-300' },
+    { href: '/qr-scanner', title: t('dashboardScanQr'), description: t('dashboardScanQrDesc'), icon: '📷', accentClassName: 'text-slate-300' },
+    { href: '/reports', title: t('dashboardReports'), description: t('dashboardReportsDesc'), icon: '📊', accentClassName: 'text-sky-300' },
   ];
 
   return (
@@ -136,13 +91,13 @@ export default function DashboardPage() {
         <Header />
 
         <main className="px-6 pb-8 pt-4 lg:px-8">
-          <h1 className="mb-8 text-5xl font-black tracking-tight text-white">Dashboard</h1>
+          <h1 className="mb-8 text-5xl font-black tracking-tight text-white">{t('dashboardTitle')}</h1>
 
           <section className="mb-8 rounded-2xl bg-[#1d1d1d] px-8 py-10 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
             <h2 className="text-2xl font-extrabold text-white">
-              สวัสดี, {user?.fullName || user?.username || 'System Administrator'}!
+              {t('dashboardWelcome', { name: user?.fullName || user?.username || t('sidebarSystemAdministrator') })}
             </h2>
-            <p className="mt-3 text-lg text-zinc-400">Role: {user?.role || 'admin'}</p>
+            <p className="mt-3 text-lg text-zinc-400">{t('dashboardRole', { role: user?.role || 'admin' })}</p>
           </section>
 
           <section className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
@@ -157,14 +112,13 @@ export default function DashboardPage() {
                   >
                     <div className="text-4xl">{card.icon}</div>
                     <p className="mt-5 text-lg font-semibold text-zinc-400">{card.title}</p>
-                    <p className="mt-1 text-sm text-zinc-500">{card.subtitle}</p>
                     <p className={`mt-4 text-5xl font-black tracking-tight ${card.valueClassName}`}>{card.value}</p>
                   </div>
                 ))}
           </section>
 
           <section className="mb-8 rounded-2xl bg-[#1d1d1d] px-8 py-9 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-            <h2 className="text-3xl font-bold text-white">Quick Actions</h2>
+            <h2 className="text-3xl font-bold text-white">{t('dashboardQuickActions')}</h2>
             <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
               {quickActions.map((action) => (
                 <Link
@@ -184,10 +138,8 @@ export default function DashboardPage() {
             <div className="flex items-start gap-3">
               <span className="mt-1 text-xl text-indigo-300">ℹ️</span>
               <div>
-                <h2 className="text-2xl font-bold text-white">Demo Mode</h2>
-                <p className="mt-2 text-lg text-zinc-400">
-                  Dashboard currently showing demo data. Connect backend API to load real asset data from database.
-                </p>
+                <h2 className="text-2xl font-bold text-white">{t('dashboardDemoMode')}</h2>
+                <p className="mt-2 text-lg text-zinc-400">{t('dashboardDemoDesc')}</p>
               </div>
             </div>
           </section>

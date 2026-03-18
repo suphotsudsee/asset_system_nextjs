@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const status = searchParams.get('status');
     const category = searchParams.get('category');
+    const department = searchParams.get('department');
     const search = searchParams.get('search');
 
     const where: Prisma.AssetWhereInput = {};
@@ -52,6 +53,9 @@ export async function GET(request: NextRequest) {
     }
     if (category) {
       where.categoryId = parseInt(category);
+    }
+    if (department) {
+      where.departmentId = parseInt(department);
     }
     if (search) {
       where.OR = [

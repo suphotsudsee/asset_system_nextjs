@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSessionFromCookie, verifyJWT } from '@/lib/auth';
+import { buildAssetQrPayload } from '@/lib/qr-payload';
+import { getAssetQrUrl } from '@/lib/app-url';
 import QRCode from 'qrcode';
 
 // GET /api/qr/[id] - Generate QR code for asset
@@ -20,6 +22,10 @@ export async function GET(
 
     const asset = await prisma.asset.findUnique({
       where: { id: parseInt(id) },
+      include: {
+        department: true,
+        category: true,
+      },
     });
 
     if (!asset) {
@@ -31,20 +37,30 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const qrUrl = `${process.env.NEXT_PUBLIC_APP_URL}/qr/${asset.id}`;
+    const qrPayload = buildAssetQrPayload({
+      id: asset.id,
+      assetCode: asset.assetCode,
+      name: asset.name,
+      department: asset.department?.name ?? null,
+      status: asset.status,
+      category: asset.category?.name ?? null,
+      location: asset.location,
+      serialNumber: asset.serialNumber,
+      openUrl: getAssetQrUrl(request, asset.id),
+    });
 
     // Generate QR code as PNG buffer
-    const qrCodeImage = await QRCode.toDataURL(qrUrl, {
+    const qrCodeImage = await QRCode.toDataURL(qrPayload, {
       width: 300,
       margin: 2,
-      errorCorrectionLevel: 'M',
+      errorCorrectionLevel: 'L',
     });
 
     return NextResponse.json({
       assetId: asset.id,
       assetCode: asset.assetCode,
       qrCodeImage,
-      qrData: qrUrl,
+      qrData: qrPayload,
     });
   } catch (error) {
     console.error('QR code generation error:', error);

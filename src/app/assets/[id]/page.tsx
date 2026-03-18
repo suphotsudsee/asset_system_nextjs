@@ -163,7 +163,7 @@ export default function AssetDetailPage() {
   }
 
   const imageUrl = getAssetImage(asset);
-  const qrImageUrl = `/api/qr/${asset.id}/image`;
+  const qrImageUrl = `/api/qr/${asset.id}/image?rev=offline-v2`;
   const qrDownloadUrl = `/api/qr/${asset.id}/download`;
   const maintenanceCount = asset.maintenanceRecords?.length ?? 0;
 

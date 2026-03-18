@@ -6,8 +6,14 @@ import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
 import Toast from '../../components/Toast';
+import { parseAssetQrPayload } from '@/lib/qr-payload';
 
 function resolveScanTarget(decodedText: string) {
+  const offlinePayload = parseAssetQrPayload(decodedText);
+  if (offlinePayload) {
+    return `/assets/${offlinePayload.assetId}`;
+  }
+
   if (decodedText.startsWith('http://') || decodedText.startsWith('https://')) {
     try {
       const url = new URL(decodedText);

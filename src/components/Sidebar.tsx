@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { defaultBranding, getBrandingSnapshot, parseBranding, subscribeBranding } from '@/lib/branding';
+import { useAppLanguage } from '@/lib/language';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -16,19 +17,10 @@ interface UserProfile {
   fullName?: string | null;
 }
 
-const menuItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { href: '/assets', label: 'Assets', icon: '📦' },
-  { href: '/depreciation', label: 'Depreciation', icon: '📝' },
-  { href: '/maintenance', label: 'Maintenance', icon: '🔧' },
-  { href: '/qr-scanner', label: 'QR Scanner', icon: '📷' },
-  { href: '/reports', label: 'Reports', icon: '📋' },
-  { href: '/settings', label: 'Settings', icon: '⚙️' },
-];
-
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useAppLanguage();
   const [sidebarVisible, setSidebarVisible] = useState(isOpen);
   const userSnapshot = useSyncExternalStore(
     () => () => {},
@@ -52,6 +44,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   }, [userSnapshot]);
 
   const branding = useMemo(() => parseBranding(brandingSnapshot), [brandingSnapshot]);
+
+  const menuItems = [
+    { href: '/dashboard', label: t('sidebarDashboard'), icon: '📊' },
+    { href: '/assets', label: t('sidebarAssets'), icon: '📦' },
+    { href: '/depreciation', label: t('sidebarDepreciation'), icon: '📉' },
+    { href: '/maintenance', label: t('sidebarMaintenance'), icon: '🔧' },
+    { href: '/qr-scanner', label: t('sidebarQrScanner'), icon: '📷' },
+    { href: '/reports', label: t('sidebarReports'), icon: '📋' },
+    { href: '/settings', label: t('sidebarSettings'), icon: '⚙️' },
+  ];
 
   useEffect(() => {
     setSidebarVisible(isOpen);
@@ -133,14 +135,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         <div className="border-t border-white/10 px-4 py-5">
           <div className="rounded-xl bg-[#1f1f1f] px-4 py-4">
-            <p className="text-lg font-bold text-white">{user?.fullName || 'System Administrator'}</p>
+            <p className="text-lg font-bold text-white">{user?.fullName || t('sidebarSystemAdministrator')}</p>
             <p className="mt-1 text-sm text-zinc-400">{user?.role || 'admin'}</p>
             <button
               type="button"
               onClick={handleLogout}
               className="mt-4 w-full rounded-lg border border-white/10 px-4 py-3 text-base font-semibold text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
             >
-              Logout
+              {t('sidebarLogout')}
             </button>
           </div>
         </div>

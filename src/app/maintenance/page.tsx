@@ -6,6 +6,7 @@ import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
 import Modal from '../../components/Modal';
 import Toast from '../../components/Toast';
+import { useAppLanguage } from '@/lib/language';
 
 interface AssetOption {
   id: number;
@@ -32,8 +33,6 @@ interface Maintenance {
   };
 }
 
-const currencyFormatter = new Intl.NumberFormat('th-TH');
-
 const typeStyles: Record<string, string> = {
   preventive: 'bg-emerald-950 text-emerald-400',
   corrective: 'bg-amber-950 text-amber-400',
@@ -48,6 +47,7 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function MaintenancePage() {
+  const { language, locale } = useAppLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [maintenances, setMaintenances] = useState<Maintenance[]>([]);
   const [assets, setAssets] = useState<AssetOption[]>([]);
@@ -69,6 +69,24 @@ export default function MaintenancePage() {
     technicianName: '',
   });
   const router = useRouter();
+  const currencyDisplay = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+  const typeLabels = useMemo(
+    () => ({
+      preventive: language === 'th' ? 'บำรุงรักษาเชิงป้องกัน' : 'Preventive',
+      corrective: language === 'th' ? 'ซ่อมแก้ไข' : 'Corrective',
+      emergency: language === 'th' ? 'ฉุกเฉิน' : 'Emergency',
+    }),
+    [language]
+  );
+  const statusLabels = useMemo(
+    () => ({
+      pending: language === 'th' ? 'รอดำเนินการ' : 'Pending',
+      in_progress: language === 'th' ? 'กำลังดำเนินการ' : 'In Progress',
+      completed: language === 'th' ? 'เสร็จสิ้น' : 'Completed',
+      cancelled: language === 'th' ? 'ยกเลิก' : 'Cancelled',
+    }),
+    [language]
+  );
 
   const fetchMaintenances = useCallback(async () => {
     setLoading(true);
@@ -227,7 +245,7 @@ export default function MaintenancePage() {
             </div>
             <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
               <p className="text-lg text-zinc-400">Total Cost</p>
-              <p className="mt-4 text-4xl font-black text-emerald-400">{currencyFormatter.format(summary.totalCost)} ฿</p>
+              <p className="mt-4 text-4xl font-black text-emerald-400">{currencyDisplay.format(summary.totalCost)} ฿</p>
             </div>
           </section>
 
@@ -240,11 +258,11 @@ export default function MaintenancePage() {
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="w-44 rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
                 >
-                  <option value="">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
+                  <option value="">{language === 'th' ? 'ทั้งหมด' : 'All'}</option>
+                  <option value="pending">{statusLabels.pending}</option>
+                  <option value="in_progress">{statusLabels.in_progress}</option>
+                  <option value="completed">{statusLabels.completed}</option>
+                  <option value="cancelled">{statusLabels.cancelled}</option>
                 </select>
               </div>
 
@@ -255,10 +273,10 @@ export default function MaintenancePage() {
                   onChange={(e) => setTypeFilter(e.target.value)}
                   className="w-44 rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
                 >
-                  <option value="">All</option>
-                  <option value="preventive">Preventive</option>
-                  <option value="corrective">Corrective</option>
-                  <option value="emergency">Emergency</option>
+                  <option value="">{language === 'th' ? 'ทั้งหมด' : 'All'}</option>
+                  <option value="preventive">{typeLabels.preventive}</option>
+                  <option value="corrective">{typeLabels.corrective}</option>
+                  <option value="emergency">{typeLabels.emergency}</option>
                 </select>
               </div>
             </div>
@@ -305,15 +323,19 @@ export default function MaintenancePage() {
                             <p className="mt-1 text-base text-indigo-400">{item.asset?.assetCode || '-'}</p>
                           </td>
                           <td className="px-4 py-6 align-middle">
-                            <span className={`inline-flex rounded-md px-4 py-1 text-sm font-bold ${typeClass}`}>{item.maintenanceType}</span>
+                            <span className={`inline-flex rounded-md px-4 py-1 text-sm font-bold ${typeClass}`}>
+                              {typeLabels[item.maintenanceType as keyof typeof typeLabels] || item.maintenanceType}
+                            </span>
                           </td>
                           <td className="px-4 py-6 align-middle">
-                            <span className={`inline-flex rounded-full px-4 py-1 text-sm font-bold ${statusClass}`}>{item.status}</span>
+                            <span className={`inline-flex rounded-full px-4 py-1 text-sm font-bold ${statusClass}`}>
+                              {statusLabels[item.status as keyof typeof statusLabels] || item.status}
+                            </span>
                           </td>
                           <td className="px-4 py-6 align-middle text-zinc-400">{formatDate(item.scheduledDate)}</td>
                           <td className="px-4 py-6 align-middle">{item.technicianName || '-'}</td>
                           <td className="px-4 py-6 text-right align-middle font-bold text-emerald-400">
-                            {currencyFormatter.format(item.totalCost)} ฿
+                            {currencyDisplay.format(item.totalCost)} ฿
                           </td>
                           <td className="px-4 py-6 text-right align-middle">
                             <button
@@ -405,9 +427,9 @@ export default function MaintenancePage() {
               onChange={(e) => setFormData((current) => ({ ...current, maintenanceType: e.target.value }))}
               className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
             >
-              <option value="preventive">Preventive</option>
-              <option value="corrective">Corrective</option>
-              <option value="emergency">Emergency</option>
+              <option value="preventive">{typeLabels.preventive}</option>
+              <option value="corrective">{typeLabels.corrective}</option>
+              <option value="emergency">{typeLabels.emergency}</option>
             </select>
           </div>
 
@@ -418,10 +440,10 @@ export default function MaintenancePage() {
               onChange={(e) => setFormData((current) => ({ ...current, status: e.target.value }))}
               className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
             >
-              <option value="pending">Pending</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="pending">{statusLabels.pending}</option>
+              <option value="in_progress">{statusLabels.in_progress}</option>
+              <option value="completed">{statusLabels.completed}</option>
+              <option value="cancelled">{statusLabels.cancelled}</option>
             </select>
           </div>
 

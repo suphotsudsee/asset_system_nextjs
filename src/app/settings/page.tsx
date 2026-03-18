@@ -7,11 +7,14 @@ import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
 import Toast from '../../components/Toast';
 import { defaultBranding, getBrandingSnapshot, parseBranding, saveBranding } from '@/lib/branding';
+import { AppLanguage, useAppLanguage } from '@/lib/language';
 
 export default function SettingsPage() {
+  const { language, setLanguage, t } = useAppLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [brandTitle, setBrandTitle] = useState(() => parseBranding(getBrandingSnapshot()).title);
   const [brandSubtitle, setBrandSubtitle] = useState(() => parseBranding(getBrandingSnapshot()).subtitle);
+  const [selectedLanguage, setSelectedLanguage] = useState<AppLanguage>(language);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const router = useRouter();
 
@@ -19,31 +22,40 @@ export default function SettingsPage() {
     const token = localStorage.getItem('token');
     if (!token) {
       router.push('/');
-      return;
     }
   }, [router]);
 
   const menuItems = [
     {
       id: 'departments',
-      title: 'หน่วยงาน',
-      description: 'จัดการหน่วยงานและโครงสร้างภายใน',
+      title: t('settingsDepartments'),
+      description: t('settingsDepartmentsDesc'),
       icon: '🏢',
       href: '/settings/departments',
     },
     {
       id: 'categories',
-      title: 'หมวดหมู่ครุภัณฑ์',
-      description: 'จัดการประเภทและหมวดหมู่ของครุภัณฑ์',
+      title: t('settingsCategories'),
+      description: t('settingsCategoriesDesc'),
       icon: '📦',
       href: '/settings/categories',
     },
     {
       id: 'users',
-      title: 'ผู้ใช้งาน',
-      description: 'จัดการผู้ใช้และสิทธิ์การเข้าถึงระบบ',
+      title: t('settingsUsers'),
+      description: t('settingsUsersDesc'),
       icon: '👤',
       href: '/settings/users',
+    },
+    {
+      id: 'import-csv',
+      title: language === 'th' ? 'นำเข้า CSV' : 'Import CSV',
+      description:
+        language === 'th'
+          ? 'อัปโหลดไฟล์ GLPI CSV เพื่อนำเข้าครุภัณฑ์เข้าสู่ระบบ'
+          : 'Upload a GLPI CSV file to import assets into the system',
+      icon: '📥',
+      href: '/settings/import-csv',
     },
   ];
 
@@ -52,12 +64,17 @@ export default function SettingsPage() {
     const subtitle = brandSubtitle.trim();
 
     if (!title || !subtitle) {
-      setToast({ message: 'กรุณากรอกชื่อระบบและคำอธิบายให้ครบ', type: 'error' });
+      setToast({ message: t('settingsFillBranding'), type: 'error' });
       return;
     }
 
     saveBranding({ title, subtitle });
-    setToast({ message: 'บันทึก Branding เรียบร้อยแล้ว', type: 'success' });
+    setToast({ message: t('settingsSavedBranding'), type: 'success' });
+  };
+
+  const handleLanguageSave = () => {
+    setLanguage(selectedLanguage);
+    setToast({ message: selectedLanguage === 'th' ? 'บันทึกภาษาเรียบร้อยแล้ว' : 'Language saved successfully', type: 'success' });
   };
 
   return (
@@ -68,37 +85,37 @@ export default function SettingsPage() {
         <Header />
 
         <main className="p-6">
-          <h1 className="mb-6 text-3xl font-bold text-white">Settings</h1>
+          <h1 className="mb-6 text-3xl font-bold text-white">{t('settingsTitle')}</h1>
 
           <div className="mb-8 rounded-lg bg-gray-800 p-6 shadow-lg">
-            <h2 className="mb-4 text-xl font-bold text-white">Branding</h2>
+            <h2 className="mb-4 text-xl font-bold text-white">{t('settingsBranding')}</h2>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-300">ชื่อระบบด้านบน</label>
+                <label className="mb-2 block text-sm font-medium text-gray-300">{t('settingsSystemName')}</label>
                 <input
                   type="text"
                   value={brandTitle}
                   onChange={(e) => setBrandTitle(e.target.value)}
                   className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:border-indigo-500 focus:outline-none"
-                  placeholder="เช่น Asset Mgmt"
+                  placeholder="Asset Mgmt"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-300">คำอธิบายใต้ชื่อระบบ</label>
+                <label className="mb-2 block text-sm font-medium text-gray-300">{t('settingsSystemSubtitle')}</label>
                 <input
                   type="text"
                   value={brandSubtitle}
                   onChange={(e) => setBrandSubtitle(e.target.value)}
                   className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:border-indigo-500 focus:outline-none"
-                  placeholder="เช่น ระบบงานทะเบียนครุภัณฑ์"
+                  placeholder="System subtitle"
                 />
               </div>
             </div>
 
             <div className="mt-5 rounded-lg border border-gray-700 bg-gray-900 p-4">
-              <p className="text-sm text-gray-400">Preview</p>
+              <p className="text-sm text-gray-400">{t('settingsPreview')}</p>
               <p className="mt-2 text-2xl font-black text-indigo-400">{brandTitle || defaultBranding.title}</p>
               <p className="mt-1 text-sm text-gray-400">{brandSubtitle || defaultBranding.subtitle}</p>
             </div>
@@ -109,7 +126,33 @@ export default function SettingsPage() {
                 onClick={handleBrandingSave}
                 className="rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500"
               >
-                บันทึก Branding
+                {t('settingsSaveBranding')}
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-8 rounded-lg bg-gray-800 p-6 shadow-lg">
+            <h2 className="mb-4 text-xl font-bold text-white">{t('settingsLanguage')}</h2>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-300">{t('settingsLanguageLabel')}</label>
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value as AppLanguage)}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:border-indigo-500 focus:outline-none"
+                >
+                  <option value="th">{t('settingsThai')}</option>
+                  <option value="en">{t('settingsEnglish')}</option>
+                </select>
+                <p className="mt-2 text-sm text-gray-400">{t('settingsLanguageHint')}</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleLanguageSave}
+                className="rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+              >
+                {t('settingsSaveLanguage')}
               </button>
             </div>
           </div>
@@ -125,21 +168,21 @@ export default function SettingsPage() {
                 <h3 className="mb-2 text-xl font-bold text-white">{item.title}</h3>
                 <p className="mb-4 text-gray-400">{item.description}</p>
                 <span className="inline-block rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
-                  จัดการ
+                  {t('settingsManage')}
                 </span>
               </Link>
             ))}
           </div>
 
           <div className="rounded-lg bg-gray-800 p-6 shadow-lg">
-            <h2 className="mb-4 text-xl font-bold text-white">System Info</h2>
+            <h2 className="mb-4 text-xl font-bold text-white">{t('settingsSystemInfo')}</h2>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-gray-400">Version</p>
+                <p className="text-gray-400">{t('settingsVersion')}</p>
                 <p className="text-white">1.0.0</p>
               </div>
               <div>
-                <p className="text-gray-400">Database</p>
+                <p className="text-gray-400">{t('settingsDatabase')}</p>
                 <p className="text-white">MySQL (localhost:3333)</p>
               </div>
               <div>

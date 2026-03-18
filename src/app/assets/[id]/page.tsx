@@ -185,9 +185,19 @@ export default function AssetDetailPage() {
             ← Back to Assets
           </button>
 
-          <div className="mb-8 flex flex-wrap items-center gap-4">
-            <h1 className="text-5xl font-black tracking-tight text-white">{asset.name}</h1>
-            <span className={`rounded-md px-4 py-1 text-sm font-bold ${statusBadgeClass}`}>{asset.status}</span>
+          <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-4">
+              <h1 className="text-5xl font-black tracking-tight text-white">{asset.name}</h1>
+              <span className={`rounded-md px-4 py-1 text-sm font-bold ${statusBadgeClass}`}>{asset.status}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => router.push(`/assets/${asset.id}/edit`)}
+              className="inline-flex items-center justify-center rounded-lg bg-indigo-500 px-5 py-3 text-base font-bold text-white transition-colors hover:bg-indigo-400"
+            >
+              Edit Asset
+            </button>
           </div>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_260px]">

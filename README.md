@@ -31,7 +31,7 @@ npx prisma db seed
 npm run dev
 ```
 
-เปิดเบราว์เซอร์ไปที่: http://localhost:3001
+เปิดเบราว์เซอร์ไปที่: http://localhost:9015
 
 ## 👤 ข้อมูลเข้าสู่ระบบ
 

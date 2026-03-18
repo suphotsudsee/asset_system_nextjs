@@ -25,7 +25,7 @@ export function getRequestOrigin(request: NextRequest) {
   const protocol = forwardedProto || (host?.includes('localhost') ? 'http' : 'http');
 
   if (!host) {
-    return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+    return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9015';
   }
 
   return `${protocol}://${host}`;

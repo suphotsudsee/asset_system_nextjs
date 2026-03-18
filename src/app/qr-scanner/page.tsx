@@ -157,7 +157,7 @@ export default function QRScannerPage() {
                   <input
                     type="text"
                     name="code"
-                    placeholder="AST-2026-001 หรือ http://localhost:3001/qr/1"
+                    placeholder="AST-2026-001 หรือ http://localhost:9015/qr/1"
                     className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
                   />
                 </div>

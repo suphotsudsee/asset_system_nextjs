@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { defaultBranding, getBrandingSnapshot, parseBranding, subscribeBranding } from '@/lib/branding';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -34,6 +35,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     () => localStorage.getItem('user'),
     () => null
   );
+  const brandingSnapshot = useSyncExternalStore(
+    subscribeBranding,
+    getBrandingSnapshot,
+    () => JSON.stringify(defaultBranding)
+  );
+
   const user = useMemo<UserProfile | null>(() => {
     if (!userSnapshot) return null;
 
@@ -43,6 +50,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       return null;
     }
   }, [userSnapshot]);
+
+  const branding = useMemo(() => parseBranding(brandingSnapshot), [brandingSnapshot]);
 
   useEffect(() => {
     setSidebarVisible(isOpen);
@@ -96,8 +105,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="flex items-center gap-3">
             <span className="text-3xl text-indigo-200">🏛️</span>
             <div>
-              <h1 className="text-3xl font-black tracking-tight text-indigo-400">Asset Mgmt</h1>
-              <p className="mt-1 text-sm text-zinc-400">ระบบงานทะเบียนครุภัณฑ์</p>
+              <h1 className="text-3xl font-black tracking-tight text-indigo-400">{branding.title}</h1>
+              <p className="mt-1 text-sm text-zinc-400">{branding.subtitle}</p>
             </div>
           </div>
         </div>

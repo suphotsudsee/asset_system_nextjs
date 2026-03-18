@@ -44,7 +44,6 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       username: user.username,
       role: user.role,
-      agencyId: user.agencyId,
     });
 
     const response = NextResponse.json({
@@ -54,7 +53,6 @@ export async function POST(request: NextRequest) {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
-        agencyId: user.agencyId,
       },
       token,
     });

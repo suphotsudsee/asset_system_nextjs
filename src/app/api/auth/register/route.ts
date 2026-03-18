@@ -5,7 +5,7 @@ import { hashPassword, createJWT } from '@/lib/auth';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { username, email, password, fullName, role, agencyId } = body;
+    const { username, email, password, fullName, role } = body;
 
     // Validate required fields
     if (!username || !email || !password) {
@@ -40,7 +40,6 @@ export async function POST(request: NextRequest) {
         hashedPassword,
         fullName,
         role: role || 'staff',
-        agencyId,
         permissions: JSON.stringify([]),
       },
     });
@@ -50,7 +49,6 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       username: user.username,
       role: user.role,
-      agencyId: user.agencyId,
     });
 
     return NextResponse.json({
@@ -60,7 +58,6 @@ export async function POST(request: NextRequest) {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
-        agencyId: user.agencyId,
       },
       token,
     }, { status: 201 });

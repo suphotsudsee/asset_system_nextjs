@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const payload = await verifyJWT(session);
+    await verifyJWT(session);
 
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
@@ -39,13 +39,6 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
 
     const where: Prisma.AssetWhereInput = {};
-
-    // Multi-tenancy: filter by agency
-    if (payload.role !== 'admin') {
-      if (payload.agencyId != null) {
-        where.agencyId = payload.agencyId;
-      }
-    }
 
     // Filters
     if (status) {

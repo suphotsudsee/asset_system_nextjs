@@ -17,7 +17,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const payload = await verifyJWT(session);
+    await verifyJWT(session);
     const { id } = await params;
 
     const asset = await prisma.asset.findUnique({
@@ -30,11 +30,6 @@ export async function GET(
 
     if (!asset) {
       return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
-    }
-
-    // Multi-tenancy check
-    if (payload.role !== 'admin' && asset.agencyId !== payload.agencyId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const qrData = buildAssetQrPayload({

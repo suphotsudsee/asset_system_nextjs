@@ -75,6 +75,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'CREATE',
+        entityType: 'Department',
+        entityId: department.id,
+        newValues: JSON.stringify({ name, code, description }),
+        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        userAgent: request.headers.get('user-agent') || undefined,
+      },
+    });
+
     return NextResponse.json(department, { status: 201 });
   } catch (error) {
     console.error('Department creation error:', error);

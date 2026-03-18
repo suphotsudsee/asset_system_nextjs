@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getSessionFromCookie, verifyJWT } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const cookieHeader = request.headers.get('cookie') || undefined;
+    const session = getSessionFromCookie(cookieHeader);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    await verifyJWT(session);
+
     const maintenances = await prisma.maintenanceRecord.findMany({
       include: {
         asset: {
@@ -23,6 +31,13 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const cookieHeader = request.headers.get('cookie') || undefined;
+    const session = getSessionFromCookie(cookieHeader);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const payload = await verifyJWT(session);
+
     const body = await request.json();
     const maintenance = await prisma.maintenanceRecord.create({
       data: {
@@ -40,6 +55,25 @@ export async function POST(request: NextRequest) {
         technicianName: body.technicianName,
       },
     });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'CREATE',
+        entityType: 'MaintenanceRecord',
+        entityId: maintenance.id,
+        newValues: JSON.stringify({
+          assetId: body.assetId,
+          maintenanceType: body.maintenanceType,
+          title: body.title,
+          status: body.status,
+        }),
+        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        userAgent: request.headers.get('user-agent') || undefined,
+      },
+    });
+
     return NextResponse.json(maintenance);
   } catch (error) {
     console.error('Failed to create maintenance:', error);

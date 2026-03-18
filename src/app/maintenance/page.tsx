@@ -1,11 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
 import Modal from '../../components/Modal';
 import Toast from '../../components/Toast';
+
+interface AssetOption {
+  id: number;
+  assetCode: string;
+  name: string;
+}
 
 interface Maintenance {
   id: number;
@@ -16,10 +22,8 @@ interface Maintenance {
   priority: string;
   scheduledDate?: string | null;
   completedDate?: string | null;
-  dueDate?: string | null;
   status: string;
-  laborCost: number;
-  partsCost: number;
+  laborCost: number | null;
   totalCost: number;
   technicianName?: string | null;
   asset?: {
@@ -28,26 +32,79 @@ interface Maintenance {
   };
 }
 
+const currencyFormatter = new Intl.NumberFormat('th-TH');
+
+const typeStyles: Record<string, string> = {
+  preventive: 'bg-emerald-950 text-emerald-400',
+  corrective: 'bg-amber-950 text-amber-400',
+  emergency: 'bg-rose-950 text-rose-400',
+};
+
+const statusStyles: Record<string, string> = {
+  pending: 'bg-amber-950 text-amber-400',
+  in_progress: 'bg-indigo-950 text-indigo-400',
+  completed: 'bg-emerald-950 text-emerald-400',
+  cancelled: 'bg-zinc-800 text-zinc-300',
+};
+
 export default function MaintenancePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [maintenances, setMaintenances] = useState<Maintenance[]>([]);
+  const [assets, setAssets] = useState<AssetOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [formData, setFormData] = useState({
-    assetId: 1,
+    assetId: 0,
     maintenanceType: 'preventive',
     title: '',
     description: '',
     priority: 'medium',
     scheduledDate: '',
-    dueDate: '',
     status: 'pending',
     laborCost: 0,
     partsCost: 0,
     technicianName: '',
   });
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const router = useRouter();
+
+  const fetchMaintenances = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/maintenance');
+      if (!res.ok) return;
+
+      const data = await res.json();
+      setMaintenances(data);
+    } catch {
+      console.error('Failed to fetch maintenances');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchAssets = useCallback(async () => {
+    try {
+      const res = await fetch('/api/assets?page=1&limit=100');
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const items: AssetOption[] = data.assets ?? [];
+      setAssets(items);
+
+      if (items.length > 0) {
+        setFormData((current) => ({
+          ...current,
+          assetId: current.assetId || items[0].id,
+        }));
+      }
+    } catch {
+      console.error('Failed to fetch assets');
+    }
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -55,236 +112,378 @@ export default function MaintenancePage() {
       router.push('/');
       return;
     }
-    fetchMaintenances();
-  }, []);
 
-  const fetchMaintenances = async () => {
-    try {
-      const res = await fetch('/api/maintenance');
-      if (res.ok) {
-        const data = await res.json();
-        setMaintenances(data);
-      }
-    } catch (e) {
-      console.error('Failed to fetch maintenances');
-    } finally {
-      setLoading(false);
-    }
+    void Promise.all([fetchMaintenances(), fetchAssets()]);
+  }, [fetchAssets, fetchMaintenances, router]);
+
+  const resetForm = () => {
+    setFormData({
+      assetId: assets[0]?.id ?? 0,
+      maintenanceType: 'preventive',
+      title: '',
+      description: '',
+      priority: 'medium',
+      scheduledDate: '',
+      status: 'pending',
+      laborCost: 0,
+      partsCost: 0,
+      technicianName: '',
+    });
   };
 
   const handleCreate = async () => {
+    if (!formData.assetId || !formData.title.trim()) {
+      setToast({ message: 'กรุณากรอกข้อมูลให้ครบ', type: 'info' });
+      return;
+    }
+
     try {
       const res = await fetch('/api/maintenance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
+
       if (res.ok) {
-        setToast({ message: 'สร้างรอบำรุงรักษาสำเร็จ', type: 'success' });
+        setToast({ message: 'สร้างรายการซ่อมบำรุงสำเร็จ', type: 'success' });
         setCreateModalOpen(false);
-        fetchMaintenances();
-        setFormData({
-          assetId: 1,
-          maintenanceType: 'preventive',
-          title: '',
-          description: '',
-          priority: 'medium',
-          scheduledDate: '',
-          dueDate: '',
-          status: 'pending',
-          laborCost: 0,
-          partsCost: 0,
-          technicianName: '',
-        });
+        resetForm();
+        void fetchMaintenances();
       } else {
-        setToast({ message: 'สร้างไม่สำเร็จ', type: 'error' });
+        setToast({ message: 'สร้างรายการซ่อมบำรุงไม่สำเร็จ', type: 'error' });
       }
-    } catch (e) {
+    } catch {
       setToast({ message: 'เกิดข้อผิดพลาด', type: 'error' });
     }
   };
 
-  const priorityColors: Record<string, string> = {
-    low: 'bg-blue-600',
-    medium: 'bg-yellow-600',
-    high: 'bg-orange-600',
-    critical: 'bg-red-600',
-  };
+  const filteredMaintenances = useMemo(() => {
+    return maintenances.filter((item) => {
+      if (statusFilter && item.status !== statusFilter) return false;
+      if (typeFilter && item.maintenanceType !== typeFilter) return false;
+      return true;
+    });
+  }, [maintenances, statusFilter, typeFilter]);
 
-  const statusColors: Record<string, string> = {
-    pending: 'bg-gray-600',
-    in_progress: 'bg-blue-600',
-    completed: 'bg-green-600',
-    cancelled: 'bg-red-600',
+  const summary = useMemo(() => {
+    return filteredMaintenances.reduce(
+      (acc, item) => {
+        acc.totalRequests += 1;
+        if (item.status === 'pending') acc.pending += 1;
+        if (item.status === 'in_progress') acc.inProgress += 1;
+        acc.totalCost += item.totalCost ?? 0;
+        return acc;
+      },
+      {
+        totalRequests: 0,
+        pending: 0,
+        inProgress: 0,
+        totalCost: 0,
+      }
+    );
+  }, [filteredMaintenances]);
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return '-';
+    return new Date(value).toISOString().slice(0, 10);
   };
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-[#252525] text-white">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      
+
       <div className="lg:ml-64">
         <Header />
-        
-        <main className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-white">การบำรุงรักษา</h1>
+
+        <main className="px-6 pb-8 pt-4 lg:px-8">
+          <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex items-center gap-5">
+              <div className="text-6xl">🔧</div>
+              <h1 className="text-5xl font-black tracking-tight text-white">Maintenance Management</h1>
+            </div>
+
             <button
+              type="button"
               onClick={() => setCreateModalOpen(true)}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-7 py-4 text-xl font-bold text-white transition-colors hover:bg-emerald-400"
             >
-              ➕ สร้างใหม่
+              <span className="mr-3 text-2xl text-violet-300">＋</span>
+              Schedule Maintenance
             </button>
           </div>
 
-          {loading ? (
-            <div className="text-gray-400">กำลังโหลด...</div>
-          ) : (
-            <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-700">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-gray-300">ครุภัณฑ์</th>
-                    <th className="px-6 py-3 text-left text-gray-300">หัวข้อ</th>
-                    <th className="px-6 py-3 text-left text-gray-300">ประเภท</th>
-                    <th className="px-6 py-3 text-left text-gray-300">ความสำคัญ</th>
-                    <th className="px-6 py-3 text-left text-gray-300">สถานะ</th>
-                    <th className="px-6 py-3 text-left text-gray-300">กำหนด</th>
-                    <th className="px-6 py-3 text-right text-gray-300">ค่าใช้จ่าย</th>
+          <section className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+              <p className="text-lg text-zinc-400">Total Requests</p>
+              <p className="mt-4 text-4xl font-black text-white">{summary.totalRequests}</p>
+            </div>
+            <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+              <p className="text-lg text-zinc-400">Pending</p>
+              <p className="mt-4 text-4xl font-black text-amber-400">{summary.pending}</p>
+            </div>
+            <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+              <p className="text-lg text-zinc-400">In Progress</p>
+              <p className="mt-4 text-4xl font-black text-indigo-400">{summary.inProgress}</p>
+            </div>
+            <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+              <p className="text-lg text-zinc-400">Total Cost</p>
+              <p className="mt-4 text-4xl font-black text-emerald-400">{currencyFormatter.format(summary.totalCost)} ฿</p>
+            </div>
+          </section>
+
+          <section className="mb-6 rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="flex items-center gap-3">
+                <label className="text-2xl text-zinc-400">Status:</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-44 rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
+                >
+                  <option value="">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="text-2xl text-zinc-400">Type:</label>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="w-44 rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
+                >
+                  <option value="">All</option>
+                  <option value="preventive">Preventive</option>
+                  <option value="corrective">Corrective</option>
+                  <option value="emergency">Emergency</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <section className="overflow-hidden rounded-2xl bg-[#1d1d1d] shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse">
+                <thead className="bg-[#2d2d2d] text-left">
+                  <tr className="text-lg text-zinc-400">
+                    <th className="px-4 py-5 font-semibold">Asset</th>
+                    <th className="px-4 py-5 font-semibold">Type</th>
+                    <th className="px-4 py-5 font-semibold">Status</th>
+                    <th className="px-4 py-5 font-semibold">Scheduled Date</th>
+                    <th className="px-4 py-5 font-semibold">Technician</th>
+                    <th className="px-4 py-5 text-right font-semibold">Cost</th>
+                    <th className="px-4 py-5 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {maintenances.map((m) => (
-                    <tr key={m.id} className="hover:bg-gray-700 transition-colors">
-                      <td className="px-6 py-4 text-white">
-                        {m.asset?.assetCode} - {m.asset?.name}
-                      </td>
-                      <td className="px-6 py-4 text-white">{m.title}</td>
-                      <td className="px-6 py-4 text-white">{m.maintenanceType}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-xs text-white ${priorityColors[m.priority]}`}>
-                          {m.priority}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-xs text-white ${statusColors[m.status]}`}>
-                          {m.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-white">
-                        {m.dueDate ? new Date(m.dueDate).toLocaleDateString('th-TH') : '-'}
-                      </td>
-                      <td className="px-6 py-4 text-right text-white">
-                        ฿{m.totalCost.toLocaleString()}
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, index) => (
+                      <tr key={index} className="border-t border-white/5">
+                        <td className="px-4 py-6" colSpan={7}>
+                          <div className="h-8 animate-pulse rounded bg-[#2a2a2a]" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : filteredMaintenances.length === 0 ? (
+                    <tr className="border-t border-white/5">
+                      <td colSpan={7} className="px-4 py-14 text-center text-lg text-zinc-500">
+                        ไม่พบข้อมูลงานซ่อมบำรุง
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredMaintenances.map((item) => {
+                      const typeClass = typeStyles[item.maintenanceType] ?? 'bg-zinc-800 text-zinc-300';
+                      const statusClass = statusStyles[item.status] ?? 'bg-zinc-800 text-zinc-300';
+
+                      return (
+                        <tr key={item.id} className="border-t border-white/5 text-lg text-white">
+                          <td className="px-4 py-6 align-middle">
+                            <p className="font-semibold text-white">{item.asset?.name || item.title}</p>
+                            <p className="mt-1 text-base text-indigo-400">{item.asset?.assetCode || '-'}</p>
+                          </td>
+                          <td className="px-4 py-6 align-middle">
+                            <span className={`inline-flex rounded-md px-4 py-1 text-sm font-bold ${typeClass}`}>{item.maintenanceType}</span>
+                          </td>
+                          <td className="px-4 py-6 align-middle">
+                            <span className={`inline-flex rounded-full px-4 py-1 text-sm font-bold ${statusClass}`}>{item.status}</span>
+                          </td>
+                          <td className="px-4 py-6 align-middle text-zinc-400">{formatDate(item.scheduledDate)}</td>
+                          <td className="px-4 py-6 align-middle">{item.technicianName || '-'}</td>
+                          <td className="px-4 py-6 text-right align-middle font-bold text-emerald-400">
+                            {currencyFormatter.format(item.totalCost)} ฿
+                          </td>
+                          <td className="px-4 py-6 text-right align-middle">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCreateModalOpen(true);
+                                setFormData({
+                                  assetId: item.assetId,
+                                  maintenanceType: item.maintenanceType,
+                                  title: item.title,
+                                  description: item.description || '',
+                                  priority: item.priority,
+                                  scheduledDate: item.scheduledDate ? new Date(item.scheduledDate).toISOString().slice(0, 10) : '',
+                                  status: item.status,
+                                  laborCost: item.laborCost ?? item.totalCost,
+                                  partsCost: 0,
+                                  technicianName: item.technicianName || '',
+                                });
+                              }}
+                              className="font-semibold text-indigo-400 hover:text-indigo-300"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
-          )}
+          </section>
         </main>
       </div>
 
       <Modal
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        title="สร้างรอบำรุงรักษา"
+        title="Schedule Maintenance"
         footer={
-          <div className="flex space-x-4">
+          <div className="flex justify-end space-x-3">
             <button
+              type="button"
               onClick={() => setCreateModalOpen(false)}
-              className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+              className="rounded-lg bg-gray-700 px-4 py-2 text-white transition-colors hover:bg-gray-600"
             >
-              ยกเลิก
+              Cancel
             </button>
             <button
+              type="button"
               onClick={handleCreate}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="rounded-lg bg-emerald-500 px-4 py-2 text-white transition-colors hover:bg-emerald-400"
             >
-              สร้าง
+              Save
             </button>
           </div>
         }
       >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-gray-300 mb-2">ครุภัณฑ์</label>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="mb-2 block text-gray-300">Asset</label>
             <select
               value={formData.assetId}
-              onChange={(e) => setFormData({ ...formData, assetId: parseInt(e.target.value) })}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+              onChange={(e) => setFormData((current) => ({ ...current, assetId: parseInt(e.target.value, 10) }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
             >
-              <option value={1}>เลือกครุภัณฑ์</option>
+              {assets.map((asset) => (
+                <option key={asset.id} value={asset.id}>
+                  {asset.assetCode} - {asset.name}
+                </option>
+              ))}
             </select>
           </div>
-          <div>
-            <label className="block text-gray-300 mb-2">หัวข้อ</label>
+
+          <div className="md:col-span-2">
+            <label className="mb-2 block text-gray-300">Title</label>
             <input
               type="text"
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+              onChange={(e) => setFormData((current) => ({ ...current, title: e.target.value }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
             />
           </div>
+
           <div>
-            <label className="block text-gray-300 mb-2">ประเภท</label>
+            <label className="mb-2 block text-gray-300">Type</label>
             <select
               value={formData.maintenanceType}
-              onChange={(e) => setFormData({ ...formData, maintenanceType: e.target.value })}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+              onChange={(e) => setFormData((current) => ({ ...current, maintenanceType: e.target.value }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
             >
-              <option value="preventive">ป้องกัน</option>
-              <option value="corrective">แก้ไข</option>
-              <option value="predictive">พยากรณ์</option>
-              <option value="emergency">ฉุกเฉิน</option>
+              <option value="preventive">Preventive</option>
+              <option value="corrective">Corrective</option>
+              <option value="emergency">Emergency</option>
             </select>
           </div>
+
           <div>
-            <label className="block text-gray-300 mb-2">ความสำคัญ</label>
+            <label className="mb-2 block text-gray-300">Status</label>
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData((current) => ({ ...current, status: e.target.value }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
+            >
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-gray-300">Priority</label>
             <select
               value={formData.priority}
-              onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+              onChange={(e) => setFormData((current) => ({ ...current, priority: e.target.value }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
             >
-              <option value="low">ต่ำ</option>
-              <option value="medium">ปานกลาง</option>
-              <option value="high">สูง</option>
-              <option value="critical">วิกฤต</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
             </select>
           </div>
+
           <div>
-            <label className="block text-gray-300 mb-2">วันที่กำหนด</label>
+            <label className="mb-2 block text-gray-300">Scheduled Date</label>
             <input
               type="date"
-              value={formData.dueDate}
-              onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+              value={formData.scheduledDate}
+              onChange={(e) => setFormData((current) => ({ ...current, scheduledDate: e.target.value }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
             />
           </div>
+
           <div>
-            <label className="block text-gray-300 mb-2">ค่าใช้จ่ายแรงงาน</label>
+            <label className="mb-2 block text-gray-300">Technician</label>
+            <input
+              type="text"
+              value={formData.technicianName}
+              onChange={(e) => setFormData((current) => ({ ...current, technicianName: e.target.value }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-gray-300">Labor Cost</label>
             <input
               type="number"
+              min="0"
               value={formData.laborCost}
-              onChange={(e) => setFormData({ ...formData, laborCost: parseFloat(e.target.value) })}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+              onChange={(e) => setFormData((current) => ({ ...current, laborCost: parseFloat(e.target.value) || 0 }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
             />
           </div>
+
           <div>
-            <label className="block text-gray-300 mb-2">ค่าใช้จ่ายอะไหล่</label>
+            <label className="mb-2 block text-gray-300">Parts Cost</label>
             <input
               type="number"
+              min="0"
               value={formData.partsCost}
-              onChange={(e) => setFormData({ ...formData, partsCost: parseFloat(e.target.value) })}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+              onChange={(e) => setFormData((current) => ({ ...current, partsCost: parseFloat(e.target.value) || 0 }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
             />
           </div>
         </div>
       </Modal>
 
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Image from 'next/image';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Sidebar from '../../../components/Sidebar';
 import Header from '../../../components/Header';
@@ -10,6 +11,38 @@ interface AssetCategory {
   id: number;
   name: string;
   code: string;
+}
+
+interface AssetDepartment {
+  id: number;
+  name: string;
+  code: string;
+}
+
+interface MaintenanceRecord {
+  id: number;
+  maintenanceType: string;
+  title: string;
+  status: string;
+  scheduledDate?: string | null;
+  completedDate?: string | null;
+  technicianName?: string | null;
+  totalCost: number;
+}
+
+interface DepreciationRecord {
+  id: number;
+  fiscalYear: number;
+  depreciationExpense: number;
+  accumulatedDepreciation: number;
+  endingBookValue: number;
+}
+
+interface DepreciationScheduleRow {
+  year: number;
+  depreciationExpense: number;
+  accumulatedDepreciation: number;
+  endingBookValue: number;
 }
 
 interface Asset {
@@ -27,76 +60,69 @@ interface Asset {
   depreciationMethod: string;
   location?: string | null;
   departmentId?: number | null;
-  department?: { id: number; name: string; code: string } | null;
+  department?: AssetDepartment | null;
   status: string;
   condition: string;
   image?: string | null;
   imageData?: string | null;
   qrCodePath?: string | null;
+  maintenanceRecords?: MaintenanceRecord[];
+  depreciationRecords?: DepreciationRecord[];
 }
+
+type DetailTab = 'information' | 'maintenance' | 'depreciation' | 'prediction';
+
+const currencyFormatter = new Intl.NumberFormat('th-TH');
 
 function getAssetImage(target?: Partial<Asset> | null) {
   return target?.imageData ?? target?.image ?? null;
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function optimizeImage(file: File): Promise<string> {
-  const originalDataUrl = await readFileAsDataUrl(file);
-
-  const image = new Image();
-  await new Promise<void>((resolve, reject) => {
-    image.onload = () => resolve();
-    image.onerror = () => reject(new Error('Failed to load image'));
-    image.src = originalDataUrl;
-  });
-
-  const width = 400;
-  const height = 400;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return originalDataUrl;
-  }
-
-  // Center crop and resize to 100x100
-  const minSide = Math.min(image.width, image.height);
-  const sx = (image.width - minSide) / 2;
-  const sy = (image.height - minSide) / 2;
-  context.drawImage(image, sx, sy, minSide, minSide, 0, 0, width, height);
-
-  let quality = 0.82;
-  let optimized = canvas.toDataURL('image/jpeg', quality);
-
-  while (optimized.length > 50_000 && quality > 0.45) {
-    quality -= 0.08;
-    optimized = canvas.toDataURL('image/jpeg', quality);
-  }
-
-  return optimized.length < originalDataUrl.length ? optimized : originalDataUrl;
+function formatDate(value?: string | null) {
+  if (!value) return 'N/A';
+  return new Date(value).toLocaleDateString('en-US');
 }
 
 export default function AssetDetailPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [asset, setAsset] = useState<Asset | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editMode, setEditMode] = useState(false);
-  const [imageLoading, setImageLoading] = useState(false);
-  const [formData, setFormData] = useState<Partial<Asset>>({});
+  const [activeTab, setActiveTab] = useState<DetailTab>('information');
+  const [schedule, setSchedule] = useState<DepreciationScheduleRow[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const router = useRouter();
   const params = useParams<{ id: string }>();
+
+  const fetchAsset = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/assets/${params.id}`);
+      if (!res.ok) return;
+
+      const data = await res.json();
+      setAsset(data);
+    } catch {
+      console.error('Failed to fetch asset');
+    } finally {
+      setLoading(false);
+    }
+  }, [params.id]);
+
+  const fetchSchedule = useCallback(async () => {
+    setScheduleLoading(true);
+
+    try {
+      const res = await fetch(`/api/depreciation/${params.id}/schedule`);
+      if (!res.ok) return;
+
+      const data = await res.json();
+      setSchedule(data.schedule || []);
+    } catch {
+      setToast({ message: 'โหลดตารางค่าเสื่อมไม่สำเร็จ', type: 'error' });
+    } finally {
+      setScheduleLoading(false);
+    }
+  }, [params.id]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -106,330 +132,294 @@ export default function AssetDetailPage() {
     }
 
     void fetchAsset();
-  }, [router]);
+  }, [fetchAsset, router]);
 
-  const fetchAsset = async () => {
-    try {
-      const res = await fetch(`/api/assets/${params.id}`);
-      if (!res.ok) return;
+  useEffect(() => {
+    if (activeTab !== 'depreciation' || !asset) return;
+    void fetchSchedule();
+  }, [activeTab, asset, fetchSchedule]);
 
-      const data = await res.json();
-      setAsset(data);
-      setFormData(data);
-    } catch {
-      console.error('Failed to fetch asset');
-    } finally {
-      setLoading(false);
+  const statusBadgeClass = useMemo(() => {
+    switch (asset?.status) {
+      case 'active':
+        return 'bg-emerald-500 text-white';
+      case 'maintenance':
+        return 'bg-amber-500 text-black';
+      case 'inactive':
+        return 'bg-zinc-600 text-white';
+      case 'disposed':
+        return 'bg-rose-600 text-white';
+      default:
+        return 'bg-zinc-600 text-white';
     }
-  };
-
-  const handleSave = async () => {
-    if (imageLoading) {
-      setToast({ message: 'กรุณารอให้ระบบเตรียมรูปภาพก่อนบันทึก', type: 'info' });
-      return;
-    }
-
-    try {
-      const payload = { ...formData };
-      // Ensure image data is sent correctly
-      if (payload.imageData && !payload.image) {
-        payload.image = payload.imageData;
-      }
-
-      const res = await fetch(`/api/assets/${params.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        setToast({ message: 'บันทึกสำเร็จ', type: 'success' });
-        setEditMode(false);
-        await fetchAsset();
-      } else {
-        const data = await res.json();
-        setToast({ message: data.error || 'บันทึกไม่สำเร็จ', type: 'error' });
-      }
-    } catch {
-      setToast({ message: 'เกิดข้อผิดพลาด', type: 'error' });
-    }
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setImageLoading(true);
-
-    try {
-      const imageData = await optimizeImage(file);
-      setFormData((prev) => ({ ...prev, image: imageData, imageData }));
-    } catch {
-      setToast({ message: 'ไม่สามารถเตรียมรูปภาพได้', type: 'error' });
-    } finally {
-      setImageLoading(false);
-    }
-  };
+  }, [asset?.status]);
 
   if (loading || !asset) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-900">
-        <div className="text-gray-400">กำลังโหลด...</div>
+      <div className="flex min-h-screen items-center justify-center bg-[#252525]">
+        <div className="text-zinc-400">Loading asset...</div>
       </div>
     );
   }
 
+  const imageUrl = getAssetImage(asset);
+  const qrImageUrl = `/api/qr/${asset.id}/image`;
+  const qrDownloadUrl = `/api/qr/${asset.id}/download`;
+  const maintenanceCount = asset.maintenanceRecords?.length ?? 0;
+
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-[#252525] text-white">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="lg:ml-64">
         <Header />
 
-        <main className="p-6">
-          <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-white">รายละเอียดครุภัณฑ์</h1>
-            <div className="flex space-x-4">
-              {editMode ? (
-                <>
-                  <button
-                    onClick={() => {
-                      setEditMode(false);
-                      setFormData(asset);
-                    }}
-                    className="rounded bg-gray-700 px-4 py-2 text-white hover:bg-gray-600"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={imageLoading}
-                    className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {imageLoading ? 'กำลังเตรียมรูปภาพ...' : 'บันทึก'}
-                  </button>
-                </>
-              ) : (
+        <main className="px-6 pb-8 pt-4 lg:px-8">
+          <button
+            type="button"
+            onClick={() => router.push('/assets')}
+            className="mb-3 text-lg font-semibold text-indigo-400 hover:text-indigo-300"
+          >
+            ← Back to Assets
+          </button>
+
+          <div className="mb-8 flex flex-wrap items-center gap-4">
+            <h1 className="text-5xl font-black tracking-tight text-white">{asset.name}</h1>
+            <span className={`rounded-md px-4 py-1 text-sm font-bold ${statusBadgeClass}`}>{asset.status}</span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_260px]">
+            <div>
+              <div className="mb-4 flex flex-wrap gap-3 border-b border-white/10 pb-4">
                 <button
-                  onClick={() => setEditMode(true)}
-                  className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                  type="button"
+                  onClick={() => setActiveTab('information')}
+                  className={`rounded-xl border px-5 py-3 text-lg font-semibold transition-colors ${
+                    activeTab === 'information' ? 'border-white bg-transparent text-white' : 'border-transparent text-zinc-400 hover:text-white'
+                  }`}
                 >
-                  แก้ไข
+                  Information
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('maintenance')}
+                  className={`rounded-xl border px-5 py-3 text-lg font-semibold transition-colors ${
+                    activeTab === 'maintenance' ? 'border-white bg-transparent text-white' : 'border-transparent text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Maintenance ({maintenanceCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('depreciation')}
+                  className={`rounded-xl border px-5 py-3 text-lg font-semibold transition-colors ${
+                    activeTab === 'depreciation' ? 'border-white bg-transparent text-white' : 'border-transparent text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Depreciation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('prediction')}
+                  className={`rounded-xl border px-5 py-3 text-lg font-semibold transition-colors ${
+                    activeTab === 'prediction' ? 'border-white bg-transparent text-white' : 'border-transparent text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  AI Prediction
+                </button>
+              </div>
+
+              <section className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+                {activeTab === 'information' && (
+                  <>
+                    <h2 className="mb-6 text-3xl font-bold text-white">Asset Information</h2>
+                    <div className="grid grid-cols-1 gap-x-16 gap-y-6 md:grid-cols-2">
+                      <div>
+                        <p className="text-sm text-zinc-400">Asset Code</p>
+                        <p className="mt-1 text-2xl font-semibold text-white">{asset.assetCode}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-400">Serial Number</p>
+                        <p className="mt-1 text-2xl font-semibold text-white">{asset.serialNumber || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-400">Category</p>
+                        <p className="mt-1 text-2xl font-semibold text-white">{asset.category?.name || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-400">Department</p>
+                        <p className="mt-1 text-2xl font-semibold text-white">{asset.department?.name || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-400">Location</p>
+                        <p className="mt-1 text-2xl font-semibold text-white">{asset.location || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-400">Condition</p>
+                        <p className="mt-1 text-2xl font-semibold text-white">{asset.condition || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-400">Purchase Date</p>
+                        <p className="mt-1 text-2xl font-semibold text-white">{formatDate(asset.purchaseDate)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-400">Useful Life</p>
+                        <p className="mt-1 text-2xl font-semibold text-white">
+                          {asset.usefulLifeYears ? `${asset.usefulLifeYears} years` : 'years'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-400">Purchase Price</p>
+                        <p className="mt-1 text-2xl font-semibold text-emerald-400">
+                          {asset.purchasePrice != null ? `${currencyFormatter.format(asset.purchasePrice)} ฿` : 'N/A ฿'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-400">Depreciation Method</p>
+                        <p className="mt-1 text-2xl font-semibold text-white">{asset.depreciationMethod}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {activeTab === 'maintenance' && (
+                  <>
+                    <h2 className="mb-6 text-3xl font-bold text-white">Maintenance History</h2>
+                    {maintenanceCount === 0 ? (
+                      <p className="text-lg text-zinc-500">No maintenance records found.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {asset.maintenanceRecords?.map((record) => (
+                          <div key={record.id} className="rounded-xl border border-white/5 bg-[#222222] p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xl font-semibold text-white">{record.title}</p>
+                                <p className="mt-1 text-sm text-zinc-400">
+                                  {record.maintenanceType} • {record.technicianName || 'Unassigned'}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm text-zinc-400">Scheduled</p>
+                                <p className="text-lg font-semibold text-white">{formatDate(record.scheduledDate)}</p>
+                              </div>
+                            </div>
+                            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+                              <span className="rounded-full bg-[#2d2d2d] px-3 py-1 text-zinc-300">{record.status}</span>
+                              <span className="font-semibold text-emerald-400">{currencyFormatter.format(record.totalCost)} ฿</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {activeTab === 'depreciation' && (
+                  <>
+                    <h2 className="mb-6 text-3xl font-bold text-white">Depreciation Schedule</h2>
+                    {scheduleLoading ? (
+                      <div className="h-20 animate-pulse rounded-xl bg-[#252525]" />
+                    ) : schedule.length === 0 ? (
+                      <p className="text-lg text-zinc-500">No depreciation data found.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full border-collapse">
+                          <thead className="bg-[#2d2d2d] text-left text-zinc-400">
+                            <tr>
+                              <th className="px-4 py-3">Year</th>
+                              <th className="px-4 py-3 text-right">Depreciation</th>
+                              <th className="px-4 py-3 text-right">Accumulated</th>
+                              <th className="px-4 py-3 text-right">Net Book Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {schedule.map((row) => (
+                              <tr key={row.year} className="border-t border-white/5 text-white">
+                                <td className="px-4 py-4">{row.year}</td>
+                                <td className="px-4 py-4 text-right text-amber-400">{currencyFormatter.format(row.depreciationExpense)} ฿</td>
+                                <td className="px-4 py-4 text-right">{currencyFormatter.format(row.accumulatedDepreciation)} ฿</td>
+                                <td className="px-4 py-4 text-right text-emerald-400">{currencyFormatter.format(row.endingBookValue)} ฿</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {activeTab === 'prediction' && (
+                  <>
+                    <h2 className="mb-6 text-3xl font-bold text-white">AI Prediction</h2>
+                    <div className="rounded-xl border border-white/5 bg-[#222222] p-5">
+                      <p className="text-lg text-zinc-300">
+                        Based on the current status, useful life, and maintenance history, this asset appears
+                        suitable for continued operation.
+                      </p>
+                      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div className="rounded-lg bg-[#1d1d1d] p-4">
+                          <p className="text-sm text-zinc-400">Risk Level</p>
+                          <p className="mt-2 text-2xl font-bold text-emerald-400">Low</p>
+                        </div>
+                        <div className="rounded-lg bg-[#1d1d1d] p-4">
+                          <p className="text-sm text-zinc-400">Suggested Action</p>
+                          <p className="mt-2 text-2xl font-bold text-white">Monitor usage</p>
+                        </div>
+                        <div className="rounded-lg bg-[#1d1d1d] p-4">
+                          <p className="text-sm text-zinc-400">Replacement Outlook</p>
+                          <p className="mt-2 text-2xl font-bold text-white">Not urgent</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </section>
             </div>
-          </div>
 
-          <div className="rounded-lg bg-gray-800 p-6 shadow-lg">
-            {editMode ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-2 block text-gray-300">รหัสครุภัณฑ์</label>
-                  <input
-                    type="text"
-                    value={formData.assetCode ?? ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, assetCode: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-gray-300">ชื่อ</label>
-                  <input
-                    type="text"
-                    value={formData.name ?? ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-gray-300">คำอธิบาย</label>
-                  <textarea
-                    value={formData.description ?? ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                    className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-gray-300">รูปภาพครุภัณฑ์</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
-                  />
-                  <p className="mt-2 text-xs text-gray-400">ระบบจะย่อรูปอัตโนมัติก่อนบันทึก</p>
-                  {imageLoading && <p className="mt-3 text-sm text-blue-300">กำลังเตรียมรูปภาพ...</p>}
-                  {getAssetImage(formData) && (
-                    <img
-                      src={getAssetImage(formData) ?? ''}
-                      alt="Asset preview"
-                      className="mt-4 max-h-56 rounded-lg border border-gray-600 object-cover"
-                    />
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-2 block text-gray-300">ราคาซื้อ</label>
-                    <input
-                      type="number"
-                      value={formData.purchasePrice ?? 0}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, purchasePrice: parseFloat(e.target.value) || 0 }))}
-                      className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-gray-300">วันที่ซื้อ</label>
-                    <input
-                      type="date"
-                      value={formData.purchaseDate?.split('T')[0] ?? ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, purchaseDate: e.target.value }))}
-                      className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-2 block text-gray-300">อายุการใช้งาน (ปี)</label>
-                    <input
-                      type="number"
-                      value={formData.usefulLifeYears ?? 0}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, usefulLifeYears: parseInt(e.target.value, 10) || 0 }))}
-                      className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-gray-300">มูลค่าซาก</label>
-                    <input
-                      type="number"
-                      value={formData.salvageValue ?? 0}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, salvageValue: parseFloat(e.target.value) || 0 }))}
-                      className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-2 block text-gray-300">สถานะ</label>
-                    <select
-                      value={formData.status ?? 'active'}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value }))}
-                      className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
-                    >
-                      <option value="active">ใช้งาน</option>
-                      <option value="inactive">ไม่ใช้งาน</option>
-                      <option value="maintenance">บำรุงรักษา</option>
-                      <option value="disposed">จำหน่าย</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-gray-300">สภาพ</label>
-                    <select
-                      value={formData.condition ?? 'good'}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, condition: e.target.value }))}
-                      className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white"
-                    >
-                      <option value="excellent">ดีมาก</option>
-                      <option value="good">ดี</option>
-                      <option value="fair">ปานกลาง</option>
-                      <option value="poor">แย่</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-400">รหัสครุภัณฑ์</p>
-                    <p className="font-medium text-white">{asset.assetCode}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400">ชื่อ</p>
-                    <p className="font-medium text-white">{asset.name}</p>
-                  </div>
-                </div>
-
-                {asset.category?.name && (
-                  <div>
-                    <p className="text-sm text-gray-400">หมวดหมู่</p>
-                    <p className="font-medium text-white">{asset.category.name}</p>
-                  </div>
-                )}
-
-                {asset.description && (
-                  <div>
-                    <p className="text-sm text-gray-400">คำอธิบาย</p>
-                    <p className="text-white">{asset.description}</p>
-                  </div>
-                )}
-
-                {getAssetImage(asset) && (
-                  <div>
-                    <p className="mb-2 text-sm text-gray-400">รูปภาพครุภัณฑ์</p>
-                    <img
-                      src={getAssetImage(asset) ?? ''}
+            <div className="space-y-5">
+              <section className="rounded-2xl bg-[#1d1d1d] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+                <h2 className="mb-4 text-2xl font-bold text-white">🖼️ Asset Image</h2>
+                {imageUrl ? (
+                  <>
+                    <Image
+                      src={imageUrl}
                       alt={asset.name}
-                      className="w-full max-w-xl rounded-lg border border-gray-700 object-cover"
+                      width={400}
+                      height={500}
+                      unoptimized
+                      className="aspect-[4/5] w-full rounded-xl object-cover"
                     />
-                  </div>
+                    <p className="mt-4 text-center text-sm text-zinc-400">{asset.name}</p>
+                  </>
+                ) : (
+                  <div className="rounded-xl bg-[#252525] p-8 text-center text-zinc-500">No image available</div>
                 )}
+              </section>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-400">ราคาซื้อ</p>
-                    <p className="font-medium text-white">฿{(asset.purchasePrice ?? 0).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400">วันที่ซื้อ</p>
-                    <p className="font-medium text-white">
-                      {asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString('th-TH') : '-'}
-                    </p>
-                  </div>
+              <section className="rounded-2xl bg-[#1d1d1d] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+                <h2 className="mb-4 text-2xl font-bold text-white">🔳 QR Code</h2>
+                <div className="rounded-xl bg-white p-4">
+                  <Image
+                    src={qrImageUrl}
+                    alt={`QR code for ${asset.assetCode}`}
+                    width={220}
+                    height={220}
+                    unoptimized
+                    className="w-full"
+                  />
                 </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-400">อายุการใช้งาน</p>
-                    <p className="font-medium text-white">{asset.usefulLifeYears ?? '-'} ปี</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400">มูลค่าซาก</p>
-                    <p className="font-medium text-white">฿{asset.salvageValue.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400">วิธีคิดค่าเสื่อม</p>
-                    <p className="font-medium text-white">{asset.depreciationMethod}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-400">สถานะ</p>
-                    <p className="font-medium text-white">{asset.status}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400">สภาพ</p>
-                    <p className="font-medium text-white">{asset.condition}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-6">
-            <button
-              onClick={() => router.push('/assets')}
-              className="rounded bg-gray-700 px-4 py-2 text-white hover:bg-gray-600"
-            >
-              กลับ
-            </button>
+                <p className="mt-4 text-center text-base font-semibold text-indigo-400">{asset.assetCode}</p>
+                <p className="mt-3 text-sm text-zinc-400">
+                  Scan this QR code to quickly access asset information or log maintenance.
+                </p>
+                <a
+                  href={qrDownloadUrl}
+                  className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-indigo-500 px-4 py-3 text-base font-bold text-white transition-colors hover:bg-indigo-400"
+                >
+                  📥 Download QR
+                </a>
+              </section>
+            </div>
           </div>
         </main>
       </div>

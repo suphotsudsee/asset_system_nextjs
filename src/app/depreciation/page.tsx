@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
@@ -22,18 +22,59 @@ interface Depreciation {
   };
 }
 
+interface ScheduleRow {
+  year: number;
+  depreciationExpense: number;
+  accumulatedDepreciation: number;
+  endingBookValue: number;
+}
+
+interface ScheduleAssetInfo {
+  assetCode: string;
+  name: string;
+}
+
+const currencyFormatter = new Intl.NumberFormat('th-TH');
+
+const methodStyles: Record<string, string> = {
+  straight_line: 'bg-emerald-950 text-emerald-400',
+  declining_balance: 'bg-amber-950 text-amber-400',
+};
+
+const methodLabels: Record<string, string> = {
+  straight_line: 'straight-line',
+  declining_balance: 'declining',
+};
+
 export default function DepreciationPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [depreciations, setDepreciations] = useState<Depreciation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedAsset, setSelectedAsset] = useState<number | null>(null);
+  const [methodFilter, setMethodFilter] = useState('');
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [schedule, setSchedule] = useState<any[]>([]);
-  const [selectedAssetInfo, setSelectedAssetInfo] = useState<any>(null);
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [total, setTotal] = useState(0);
+  const [schedule, setSchedule] = useState<ScheduleRow[]>([]);
+  const [selectedAssetInfo, setSelectedAssetInfo] = useState<ScheduleAssetInfo | null>(null);
   const router = useRouter();
+
+  const fetchDepreciations = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const params = new URLSearchParams({
+        page: '1',
+        limit: '100',
+      });
+      const res = await fetch(`/api/depreciation?${params}`);
+      if (!res.ok) return;
+
+      const data = await res.json();
+      setDepreciations(data.depreciations ?? []);
+    } catch {
+      console.error('Failed to fetch depreciations');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -41,177 +82,210 @@ export default function DepreciationPage() {
       router.push('/');
       return;
     }
-    fetchDepreciations();
-  }, [page, rowsPerPage]);
 
-  const fetchDepreciations = async () => {
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: rowsPerPage.toString(),
-      });
-      const res = await fetch(`/api/depreciation?${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        setDepreciations(data.depreciations);
-        setTotal(data.total);
-      }
-    } catch (e) {
-      console.error('Failed to fetch depreciations');
-    } finally {
-      setLoading(false);
-    }
-  };
+    void fetchDepreciations();
+  }, [fetchDepreciations, router]);
 
   const fetchSchedule = async (assetId: number) => {
     try {
       const res = await fetch(`/api/depreciation/${assetId}/schedule`);
-      if (res.ok) {
-        const data = await res.json();
-        setSchedule(data.schedule || []);
-        setSelectedAssetInfo(data.asset);
-        setScheduleModalOpen(true);
-      }
-    } catch (e) {
+      if (!res.ok) return;
+
+      const data = await res.json();
+      setSchedule(data.schedule || []);
+      setSelectedAssetInfo(data.asset || null);
+      setScheduleModalOpen(true);
+    } catch {
       console.error('Failed to fetch schedule');
     }
   };
 
+  const filteredDepreciations = useMemo(() => {
+    if (!methodFilter) return depreciations;
+    return depreciations.filter((dep) => dep.depreciationMethod === methodFilter);
+  }, [depreciations, methodFilter]);
+
+  const summary = useMemo(() => {
+    return filteredDepreciations.reduce(
+      (acc, dep) => {
+        acc.totalOriginalValue += dep.beginningBookValue;
+        acc.accumulatedDepreciation += dep.accumulatedDepreciation;
+        acc.netBookValue += dep.endingBookValue;
+        acc.totalAssets += 1;
+        return acc;
+      },
+      {
+        totalOriginalValue: 0,
+        accumulatedDepreciation: 0,
+        netBookValue: 0,
+        totalAssets: 0,
+      }
+    );
+  }, [filteredDepreciations]);
+
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-[#252525] text-white">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      
+
       <div className="lg:ml-64">
         <Header />
-        
-        <main className="p-6">
-          <h1 className="text-3xl font-bold text-white mb-6">ค่าเสื่อมราคา</h1>
 
-          {loading ? (
-            <div className="text-gray-400">กำลังโหลด...</div>
-          ) : (
-            <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-700">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-gray-300">ครุภัณฑ์</th>
-                    <th className="px-6 py-3 text-left text-gray-300">ปี fiskal</th>
-                    <th className="px-6 py-3 text-right text-gray-300">มูลค่าต้นปี</th>
-                    <th className="px-6 py-3 text-right text-gray-300">ค่าเสื่อม</th>
-                    <th className="px-6 py-3 text-right text-gray-300">ค่าเสื่อมสะสม</th>
-                    <th className="px-6 py-3 text-right text-gray-300">มูลค่าปลายปี</th>
-                    <th className="px-6 py-3 text-left text-gray-300">วิธี</th>
-                    <th className="px-6 py-3 text-left text-gray-300">การกระทำ</th>
+        <main className="px-6 pb-8 pt-4 lg:px-8">
+          <div className="mb-8 flex items-center gap-5">
+            <div className="text-6xl">📈</div>
+            <h1 className="text-5xl font-black tracking-tight text-white">Depreciation Management</h1>
+          </div>
+
+          <section className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+              <p className="text-lg text-zinc-400">Total Original Value</p>
+              <p className="mt-4 text-4xl font-black text-indigo-400">{currencyFormatter.format(summary.totalOriginalValue)} ฿</p>
+            </div>
+            <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+              <p className="text-lg text-zinc-400">Accumulated Depreciation</p>
+              <p className="mt-4 text-4xl font-black text-amber-400">{currencyFormatter.format(summary.accumulatedDepreciation)} ฿</p>
+            </div>
+            <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+              <p className="text-lg text-zinc-400">Net Book Value</p>
+              <p className="mt-4 text-4xl font-black text-emerald-400">{currencyFormatter.format(summary.netBookValue)} ฿</p>
+            </div>
+            <div className="rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+              <p className="text-lg text-zinc-400">Total Assets</p>
+              <p className="mt-4 text-4xl font-black text-white">{summary.totalAssets}</p>
+            </div>
+          </section>
+
+          <section className="mb-6 rounded-2xl bg-[#1d1d1d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <label className="text-2xl text-zinc-400">Filter by Method:</label>
+              <select
+                value={methodFilter}
+                onChange={(e) => setMethodFilter(e.target.value)}
+                className="w-full max-w-xs rounded-lg border border-white/5 bg-[#2d2d2d] px-4 py-3 text-lg text-white outline-none transition-colors focus:border-indigo-500"
+              >
+                <option value="">All Methods</option>
+                <option value="straight_line">Straight-Line</option>
+                <option value="declining_balance">Declining Balance</option>
+              </select>
+            </div>
+          </section>
+
+          <section className="overflow-hidden rounded-2xl bg-[#1d1d1d] shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse">
+                <thead className="bg-[#2d2d2d] text-left">
+                  <tr className="text-lg text-zinc-400">
+                    <th className="px-4 py-5 font-semibold">Asset Code</th>
+                    <th className="px-4 py-5 font-semibold">Asset Name</th>
+                    <th className="px-4 py-5 font-semibold">Method</th>
+                    <th className="px-4 py-5 text-right font-semibold">Original Value</th>
+                    <th className="px-4 py-5 text-right font-semibold">Accumulated</th>
+                    <th className="px-4 py-5 text-right font-semibold">Net Book Value</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {depreciations.map((dep) => (
-                    <tr key={dep.id} className="hover:bg-gray-700 transition-colors">
-                      <td className="px-6 py-4 text-white">
-                        {dep.asset?.assetCode} - {dep.asset?.name}
-                      </td>
-                      <td className="px-6 py-4 text-white">{dep.fiscalYear}</td>
-                      <td className="px-6 py-4 text-right text-white">฿{dep.beginningBookValue.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-right text-white">฿{dep.depreciationExpense.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-right text-white">฿{dep.accumulatedDepreciation.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-right text-white">฿{dep.endingBookValue.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-white">{dep.depreciationMethod}</td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => fetchSchedule(dep.assetId)}
-                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-                        >
-                          ดูตาราง
-                        </button>
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 6 }).map((_, index) => (
+                      <tr key={index} className="border-t border-white/5">
+                        <td className="px-4 py-6" colSpan={6}>
+                          <div className="h-8 animate-pulse rounded bg-[#2a2a2a]" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : filteredDepreciations.length === 0 ? (
+                    <tr className="border-t border-white/5">
+                      <td colSpan={6} className="px-4 py-14 text-center text-lg text-zinc-500">
+                        ไม่พบข้อมูลค่าเสื่อมราคา
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredDepreciations.map((dep) => {
+                      const methodClass = methodStyles[dep.depreciationMethod] ?? 'bg-zinc-800 text-zinc-300';
+                      const methodLabel = methodLabels[dep.depreciationMethod] ?? dep.depreciationMethod;
+
+                      return (
+                        <tr
+                          key={dep.id}
+                          className="cursor-pointer border-t border-white/5 text-lg text-white transition-colors hover:bg-[#222222]"
+                          onClick={() => void fetchSchedule(dep.assetId)}
+                        >
+                          <td className="px-4 py-6 align-middle font-medium text-indigo-400">{dep.asset?.assetCode || '-'}</td>
+                          <td className="px-4 py-6 align-middle font-semibold text-white">{dep.asset?.name || '-'}</td>
+                          <td className="px-4 py-6 align-middle">
+                            <span className={`inline-flex rounded-md px-4 py-1 text-sm font-bold ${methodClass}`}>{methodLabel}</span>
+                          </td>
+                          <td className="px-4 py-6 text-right align-middle">{currencyFormatter.format(dep.beginningBookValue)} ฿</td>
+                          <td className="px-4 py-6 text-right align-middle font-bold text-amber-400">
+                            {currencyFormatter.format(dep.accumulatedDepreciation)} ฿
+                          </td>
+                          <td className="px-4 py-6 text-right align-middle font-bold text-emerald-400">
+                            {currencyFormatter.format(dep.endingBookValue)} ฿
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
+            </div>
+          </section>
 
-              {/* Pagination Controls */}
-              <div className="flex items-center justify-between px-6 py-4 bg-gray-700 border-t border-gray-600">
-                <div className="flex items-center space-x-4">
-                  <label className="text-gray-300 text-sm">แสดง:</label>
-                  <select
-                    value={rowsPerPage}
-                    onChange={(e) => {
-                      setRowsPerPage(Number(e.target.value));
-                      setPage(1);
-                    }}
-                    className="px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                  <span className="text-gray-300 text-sm">รายการต่อหน้า</span>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span className="text-gray-300 text-sm">
-                    หน้า {page} / {Math.ceil(total / rowsPerPage)} (ทั้งหมด {total} รายการ)
-                  </span>
-                  <button
-                    onClick={() => setPage(Math.max(1, page - 1))}
-                    disabled={page <= 1}
-                    className="px-4 py-2 bg-gray-800 text-white rounded disabled:opacity-50 hover:bg-gray-600"
-                  >
-                    ← ก่อนหน้า
-                  </button>
-                  <button
-                    onClick={() => setPage(Math.min(Math.ceil(total / rowsPerPage), page + 1))}
-                    disabled={page >= Math.ceil(total / rowsPerPage)}
-                    className="px-4 py-2 bg-gray-800 text-white rounded disabled:opacity-50 hover:bg-gray-600"
-                  >
-                    ถัดไป →
-                  </button>
-                </div>
+          <section className="mt-8 rounded-2xl border-l-4 border-indigo-500 bg-[#1d1d1d] px-8 py-7 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+            <div className="flex items-start gap-3">
+              <span className="mt-1 text-xl text-amber-300">💡</span>
+              <div>
+                <h2 className="text-2xl font-bold text-white">Depreciation Methods</h2>
+                <p className="mt-3 text-lg text-zinc-400">
+                  <span className="font-semibold text-zinc-300">Straight-Line:</span> Equal depreciation each year (recommended for government assets)
+                </p>
+                <p className="mt-1 text-lg text-zinc-400">
+                  <span className="font-semibold text-zinc-300">Declining Balance:</span> Higher depreciation in early years
+                </p>
               </div>
             </div>
-          )}
+          </section>
         </main>
       </div>
 
       <Modal
         isOpen={scheduleModalOpen}
         onClose={() => setScheduleModalOpen(false)}
-        title={
-          <div>
-            <h3 className="text-xl font-bold text-white">ตารางค่าเสื่อมราคา</h3>
-            {selectedAssetInfo && (
-              <p className="text-gray-400 mt-1">
-                {selectedAssetInfo.assetCode} - {selectedAssetInfo.name}
-              </p>
-            )}
-          </div>
-        }
+        title="Depreciation Schedule"
         footer={
           <button
+            type="button"
             onClick={() => setScheduleModalOpen(false)}
-            className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+            className="rounded-lg bg-gray-700 px-4 py-2 text-white transition-colors hover:bg-gray-600"
           >
-            ปิด
+            Close
           </button>
         }
       >
-        <div className="overflow-x-auto max-h-96">
+        <div className="mb-4">
+          {selectedAssetInfo && (
+            <p className="text-gray-400">
+              {selectedAssetInfo.assetCode} - {selectedAssetInfo.name}
+            </p>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-700 sticky top-0">
+            <thead className="sticky top-0 bg-gray-700">
               <tr>
-                <th className="px-4 py-2 text-left text-gray-300">ปี</th>
-                <th className="px-4 py-2 text-right text-gray-300">ค่าเสื่อม</th>
-                <th className="px-4 py-2 text-right text-gray-300">สะสม</th>
-                <th className="px-4 py-2 text-right text-gray-300">มูลค่าคงเหลือ</th>
+                <th className="px-4 py-2 text-left text-gray-300">Year</th>
+                <th className="px-4 py-2 text-right text-gray-300">Depreciation</th>
+                <th className="px-4 py-2 text-right text-gray-300">Accumulated</th>
+                <th className="px-4 py-2 text-right text-gray-300">Net Book Value</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
-              {schedule.map((row, i) => (
-                <tr key={i} className="hover:bg-gray-700">
+              {schedule.map((row, index) => (
+                <tr key={index} className="hover:bg-gray-700">
                   <td className="px-4 py-2 text-white">{row.year}</td>
-                  <td className="px-4 py-2 text-right text-white">฿{row.depreciationExpense.toLocaleString()}</td>
-                  <td className="px-4 py-2 text-right text-white">฿{row.accumulatedDepreciation.toLocaleString()}</td>
-                  <td className="px-4 py-2 text-right text-white">฿{row.endingBookValue.toLocaleString()}</td>
+                  <td className="px-4 py-2 text-right text-white">{currencyFormatter.format(row.depreciationExpense)} ฿</td>
+                  <td className="px-4 py-2 text-right text-white">{currencyFormatter.format(row.accumulatedDepreciation)} ฿</td>
+                  <td className="px-4 py-2 text-right text-white">{currencyFormatter.format(row.endingBookValue)} ฿</td>
                 </tr>
               ))}
             </tbody>

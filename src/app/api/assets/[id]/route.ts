@@ -37,6 +37,7 @@ export async function GET(
       where: { id: parseInt(id) },
       include: {
         category: true,
+        department: true,
         depreciationRecords: {
           orderBy: { fiscalYear: 'desc' },
         },
@@ -144,6 +145,32 @@ export async function PUT(
       },
     });
 
+    // Create audit log for update
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'UPDATE',
+        entityType: 'Asset',
+        entityId: asset.id,
+        oldValues: JSON.stringify({
+          assetCode: asset.assetCode,
+          name: asset.name,
+          categoryId: asset.categoryId,
+          departmentId: asset.departmentId,
+          status: asset.status,
+        }),
+        newValues: JSON.stringify({
+          assetCode: data.assetCode ?? asset.assetCode,
+          name: data.name ?? asset.name,
+          categoryId: data.categoryId ?? asset.categoryId,
+          departmentId: data.departmentId ?? asset.departmentId,
+          status: data.status ?? asset.status,
+        }),
+        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        userAgent: request.headers.get('user-agent') || undefined,
+      },
+    });
+
     return NextResponse.json({ ...updated, image: updated.imageData });
   } catch (error) {
     console.error('Asset update error:', error);
@@ -181,6 +208,25 @@ export async function DELETE(
     if (!asset) {
       return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
     }
+
+    // Create audit log before deletion
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'DELETE',
+        entityType: 'Asset',
+        entityId: asset.id,
+        oldValues: JSON.stringify({
+          assetCode: asset.assetCode,
+          name: asset.name,
+          categoryId: asset.categoryId,
+          departmentId: asset.departmentId,
+          status: asset.status,
+        }),
+        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        userAgent: request.headers.get('user-agent') || undefined,
+      },
+    });
 
     await prisma.asset.delete({
       where: { id: parseInt(id) },

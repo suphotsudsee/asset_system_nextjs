@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
             category: { select: { name: true } },
           },
         });
+
         return NextResponse.json(
           assets.map((asset) => ({
             assetCode: asset.assetCode,
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
           }))
         );
       }
+
       case 'category': {
         const categories = await prisma.category.findMany({
           include: {
@@ -35,33 +37,63 @@ export async function GET(request: NextRequest) {
             },
           },
         });
-        return NextResponse.json(categories.map((c) => ({
-          category: c.name,
-          count: c._count.assets,
-        })));
+
+        return NextResponse.json(
+          categories.map((category) => ({
+            category: category.name,
+            count: category._count.assets,
+          }))
+        );
       }
+
       case 'department': {
-        const departments = await prisma.asset.groupBy({
-          by: ['department'],
+        const groupedDepartments = await prisma.asset.groupBy({
+          by: ['departmentId'],
           _count: { id: true },
           _sum: { purchasePrice: true },
         });
-        return NextResponse.json(departments.map((d) => ({
-          department: d.department || 'ไม่ระบุ',
-          count: d._count.id,
-          totalValue: d._sum.purchasePrice || 0,
-        })));
+
+        const departmentIds = groupedDepartments
+          .map((department) => department.departmentId)
+          .filter((id): id is number => id !== null);
+
+        const departmentRecords = departmentIds.length
+          ? await prisma.department.findMany({
+              where: { id: { in: departmentIds } },
+              select: { id: true, name: true },
+            })
+          : [];
+
+        const departmentNameById = new Map(
+          departmentRecords.map((department) => [department.id, department.name])
+        );
+
+        return NextResponse.json(
+          groupedDepartments.map((department) => ({
+            department:
+              department.departmentId === null
+                ? 'ไม่ระบุ'
+                : (departmentNameById.get(department.departmentId) ?? 'ไม่ระบุ'),
+            count: department._count.id,
+            totalValue: department._sum.purchasePrice || 0,
+          }))
+        );
       }
+
       case 'status': {
         const statuses = await prisma.asset.groupBy({
           by: ['status'],
           _count: { id: true },
         });
-        return NextResponse.json(statuses.map((s) => ({
-          status: s.status,
-          count: s._count.id,
-        })));
+
+        return NextResponse.json(
+          statuses.map((status) => ({
+            status: status.status,
+            count: status._count.id,
+          }))
+        );
       }
+
       case 'depreciation': {
         const records = await prisma.depreciationRecord.findMany({
           select: {
@@ -71,6 +103,7 @@ export async function GET(request: NextRequest) {
             asset: { select: { assetCode: true, name: true } },
           },
         });
+
         return NextResponse.json(
           records.map((record) => ({
             fiscalYear: record.fiscalYear,
@@ -81,6 +114,7 @@ export async function GET(request: NextRequest) {
           }))
         );
       }
+
       default:
         return NextResponse.json({ error: 'Invalid report type' }, { status: 400 });
     }

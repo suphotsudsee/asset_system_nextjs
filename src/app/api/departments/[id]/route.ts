@@ -89,6 +89,28 @@ export async function PUT(
       },
     });
 
+    // Create audit log for update
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'UPDATE',
+        entityType: 'Department',
+        entityId: department.id,
+        oldValues: JSON.stringify({
+          name: department.name,
+          code: department.code,
+          description: department.description,
+        }),
+        newValues: JSON.stringify({
+          name: name || department.name,
+          code: code || department.code,
+          description: description !== undefined ? description : department.description,
+        }),
+        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        userAgent: request.headers.get('user-agent') || undefined,
+      },
+    });
+
     return NextResponse.json(updated);
   } catch (error) {
     console.error('Department update error:', error);
@@ -143,6 +165,23 @@ export async function DELETE(
         { status: 409 }
       );
     }
+
+    // Create audit log before deletion
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'DELETE',
+        entityType: 'Department',
+        entityId: department.id,
+        oldValues: JSON.stringify({
+          name: department.name,
+          code: department.code,
+          description: department.description,
+        }),
+        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        userAgent: request.headers.get('user-agent') || undefined,
+      },
+    });
 
     await prisma.department.delete({
       where: { id: parseInt(id) },

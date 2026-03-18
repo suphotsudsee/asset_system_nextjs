@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
             select: {
               assetCode: true,
               name: true,
+              depreciationMethod: true,
             },
           },
         },
@@ -34,7 +35,10 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({
-      depreciations,
+      depreciations: depreciations.map((record) => ({
+        ...record,
+        depreciationMethod: record.asset.depreciationMethod,
+      })),
       total,
       page,
       limit,

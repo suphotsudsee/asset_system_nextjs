@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
 import Toast from '../../components/Toast';
@@ -26,18 +26,41 @@ export default function QRScannerPage() {
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const router = useRouter();
+
+  const stopScannerInstance = async () => {
+    const scanner = scannerRef.current;
+    if (!scanner) return;
+
+    if (scanner.getState() === Html5QrcodeScannerState.SCANNING) {
+      await scanner.stop();
+    }
+
+    scanner.clear();
+    scannerRef.current = null;
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
       router.push('/');
     }
+
+    return () => {
+      void stopScannerInstance();
+    };
   }, [router]);
 
   const startScanner = async () => {
     try {
+      if (scannerRef.current) {
+        await stopScannerInstance();
+      }
+
       const html5QrCode = new Html5Qrcode('reader');
+      scannerRef.current = html5QrCode;
+
       await html5QrCode.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: 250 },
@@ -45,7 +68,7 @@ export default function QRScannerPage() {
           setScanResult(decodedText);
           setScanning(false);
           setToast({ message: `สแกนสำเร็จ: ${decodedText}`, type: 'success' });
-          await html5QrCode.stop();
+          await stopScannerInstance();
 
           const target = resolveScanTarget(decodedText);
           if (target) {
@@ -57,14 +80,15 @@ export default function QRScannerPage() {
 
       setScanning(true);
     } catch {
+      scannerRef.current = null;
+      setScanning(false);
       setToast({ message: 'ไม่สามารถเข้าถึงกล้องได้', type: 'error' });
     }
   };
 
   const stopScanner = async () => {
     try {
-      const html5QrCode = new Html5Qrcode('reader');
-      await html5QrCode.stop();
+      await stopScannerInstance();
       setScanning(false);
     } catch {
       console.error('Failed to stop scanner');
@@ -127,7 +151,7 @@ export default function QRScannerPage() {
                   <input
                     type="text"
                     name="code"
-                    placeholder="AST-2026-001 หรือ http://localhost:3000/qr/1"
+                    placeholder="AST-2026-001 หรือ http://localhost:3001/qr/1"
                     className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
                   />
                 </div>
@@ -151,7 +175,7 @@ export default function QRScannerPage() {
           <div className="mt-6 rounded-lg bg-gray-800 p-6 shadow-lg">
             <h2 className="mb-4 text-xl font-semibold text-white">วิธีใช้</h2>
             <ul className="space-y-2 text-gray-300">
-              <li>กด "เริ่มสแกน" เพื่อเปิดกล้อง</li>
+              <li>กด &quot;เริ่มสแกน&quot; เพื่อเปิดกล้อง</li>
               <li>เมื่อสแกน QR ที่เป็นลิงก์ ระบบจะเปิดหน้าการ์ดข้อมูลทันที</li>
               <li>ยังรองรับรหัสครุภัณฑ์แบบเดิมสำหรับค้นหาภายในระบบ</li>
             </ul>

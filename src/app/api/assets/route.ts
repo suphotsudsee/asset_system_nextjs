@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getSessionFromCookie, verifyJWT } from '@/lib/auth';
 
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
     const search = searchParams.get('search');
 
-    const where: any = {};
+    const where: Prisma.AssetWhereInput = {};
 
     // Multi-tenancy: filter by agency
     if (payload.role !== 'admin') {
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
         where,
         include: {
           category: true,
+          department: true,
         },
         skip: (page - 1) * limit,
         take: limit,
@@ -76,6 +78,7 @@ export async function GET(request: NextRequest) {
     // Map imageData to image for frontend compatibility
     const assetsWithImage = assets.map((a) => ({
       ...a,
+      department: a.department?.name ?? null,
       image: a.imageData,
     }));
 
@@ -175,6 +178,25 @@ export async function POST(request: NextRequest) {
       include: {
         category: true,
         department: true,
+      },
+    });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'CREATE',
+        entityType: 'Asset',
+        entityId: asset.id,
+        newValues: JSON.stringify({
+          assetCode,
+          name,
+          categoryId,
+          departmentId,
+          status,
+        }),
+        ipAddress: request.headers.get('x-forwarded-for') || request.ip,
+        userAgent: request.headers.get('user-agent') || undefined,
       },
     });
 
